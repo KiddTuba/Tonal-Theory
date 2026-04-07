@@ -222,6 +222,18 @@
             setIsPlaying(false);
           };
 
+          const playModeScale = async (rootFreq, intervals) => {
+            if (isPlaying) return;
+            setIsPlaying(true);
+            for (let i = 0; i < intervals.length; i++) {
+              // Calculate exact frequency based on half-step distance from the root note
+              const freq = rootFreq * Math.pow(2, intervals[i] / 12);
+              playTone(freq, 1.0);
+              await new Promise(r => setTimeout(r, 400)); 
+            }
+            setIsPlaying(false);
+          };
+
           return (
             <div className="p-4 md:p-8 flex flex-col items-center">
               
@@ -480,18 +492,30 @@
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="bg-slate-800/80 p-5 rounded-xl border border-sky-500/30">
-                          <h4 className="text-sky-300 font-bold text-lg mb-2">Major & Minor</h4>
-                          <ul className="space-y-2 text-sm">
-                            <li><strong className="text-white">Major:</strong> Root + M3 + P5. Happy, bright.</li>
-                            <li><strong className="text-white">Minor:</strong> Root + m3 + P5. Sad, emotional.</li>
-                          </ul>
+                          <h4 className="text-sky-300 font-bold text-lg mb-3">Major & Minor</h4>
+                          <div className="space-y-4 text-sm">
+                            <div className="flex justify-between items-start">
+                              <div><strong className="text-white block mb-1">Major:</strong> Root + M3 + P5. Happy, bright.</div>
+                              <button disabled={isPlaying} onClick={() => { setSelectedNodes([0, 4, 1]); playChord([0, 4, 1]); }} className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-sky-300 px-3 py-1 rounded text-xs font-bold transition-colors shrink-0 ml-3 shadow-md">▶ Play</button>
+                            </div>
+                            <div className="flex justify-between items-start pt-3 border-t border-slate-700/50">
+                              <div><strong className="text-white block mb-1">Minor:</strong> Root + m3 + P5. Sad, emotional.</div>
+                              <button disabled={isPlaying} onClick={() => { setSelectedNodes([0, 9, 1]); playChord([0, 9, 1]); }} className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-indigo-300 px-3 py-1 rounded text-xs font-bold transition-colors shrink-0 ml-3 shadow-md">▶ Play</button>
+                            </div>
+                          </div>
                         </div>
                         <div className="bg-slate-800/80 p-5 rounded-xl border border-indigo-500/30">
-                          <h4 className="text-indigo-300 font-bold text-lg mb-2">Diminished & Augmented</h4>
-                          <ul className="space-y-2 text-sm">
-                            <li><strong className="text-white">Diminished:</strong> Root + m3 + d5. Spooky, tense.</li>
-                            <li><strong className="text-white">Augmented:</strong> Root + M3 + #5. Dreamy, floating.</li>
-                          </ul>
+                          <h4 className="text-indigo-300 font-bold text-lg mb-3">Diminished & Augmented</h4>
+                          <div className="space-y-4 text-sm">
+                            <div className="flex justify-between items-start">
+                              <div><strong className="text-white block mb-1">Diminished:</strong> Root + m3 + d5. Spooky, tense.</div>
+                              <button disabled={isPlaying} onClick={() => { setSelectedNodes([0, 9, 6]); playChord([0, 9, 6]); }} className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-purple-300 px-3 py-1 rounded text-xs font-bold transition-colors shrink-0 ml-3 shadow-md">▶ Play</button>
+                            </div>
+                            <div className="flex justify-between items-start pt-3 border-t border-slate-700/50">
+                              <div><strong className="text-white block mb-1">Augmented:</strong> Root + M3 + #5. Dreamy, floating.</div>
+                              <button disabled={isPlaying} onClick={() => { setSelectedNodes([0, 4, 8]); playChord([0, 4, 8]); }} className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-pink-300 px-3 py-1 rounded text-xs font-bold transition-colors shrink-0 ml-3 shadow-md">▶ Play</button>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </section>
@@ -539,9 +563,10 @@
                         <table className="w-full text-left border-collapse">
                           <thead>
                             <tr className="border-b border-slate-800 text-slate-400">
-                              <th className="pb-3 w-1/3">Symbol Seen</th>
+                              <th className="pb-3 w-1/4">Symbol Seen</th>
                               <th className="pb-3 w-1/3">What it Means</th>
-                              <th className="pb-3">Example Notes (in C)</th>
+                              <th className="pb-3 w-1/4">Example Notes (in C)</th>
+                              <th className="pb-3">Hear It</th>
                             </tr>
                           </thead>
                           <tbody className="text-sm">
@@ -549,26 +574,31 @@
                               <td className="py-3"><strong className="text-sky-400 text-lg">C∆7</strong> or <strong className="text-sky-400">Cmaj7</strong></td>
                               <td className="py-3 text-slate-200">Major 7th Chord</td>
                               <td className="py-3 text-slate-400">C - E - G - B</td>
+                              <td className="py-3"><button disabled={isPlaying} onClick={() => { setSelectedNodes([0, 4, 1, 5]); playChord([0, 4, 1, 5]); }} className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white px-3 py-1 rounded text-xs font-bold transition-colors">▶ Play</button></td>
                             </tr>
                             <tr className="border-b border-slate-800/50 hover:bg-slate-900 transition-colors">
                               <td className="py-3"><strong className="text-indigo-400 text-lg">C-7</strong> or <strong className="text-indigo-400">Cmin7</strong></td>
                               <td className="py-3 text-slate-200">Minor 7th Chord</td>
                               <td className="py-3 text-slate-400">C - Eb - G - Bb</td>
+                              <td className="py-3"><button disabled={isPlaying} onClick={() => { setSelectedNodes([0, 9, 1, 10]); playChord([0, 9, 1, 10]); }} className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white px-3 py-1 rounded text-xs font-bold transition-colors">▶ Play</button></td>
                             </tr>
                             <tr className="border-b border-slate-800/50 hover:bg-slate-900 transition-colors">
                               <td className="py-3"><strong className="text-pink-400 text-lg">C7</strong> <span className="text-xs text-slate-500">(no "maj" or "min")</span></td>
                               <td className="py-3 text-slate-200">Dominant 7th Chord</td>
                               <td className="py-3 text-slate-400">C - E - G - Bb</td>
+                              <td className="py-3"><button disabled={isPlaying} onClick={() => { setSelectedNodes([0, 4, 1, 10]); playChord([0, 4, 1, 10]); }} className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white px-3 py-1 rounded text-xs font-bold transition-colors">▶ Play</button></td>
                             </tr>
                             <tr className="border-b border-slate-800/50 hover:bg-slate-900 transition-colors">
                               <td className="py-3"><strong className="text-purple-400 text-lg">Cø</strong> or <strong className="text-purple-400">Cm7b5</strong></td>
                               <td className="py-3 text-slate-200">Half-Diminished</td>
                               <td className="py-3 text-slate-400">C - Eb - Gb - Bb</td>
+                              <td className="py-3"><button disabled={isPlaying} onClick={() => { setSelectedNodes([0, 9, 6, 10]); playChord([0, 9, 6, 10]); }} className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white px-3 py-1 rounded text-xs font-bold transition-colors">▶ Play</button></td>
                             </tr>
                             <tr className="hover:bg-slate-900 transition-colors">
                               <td className="py-3"><strong className="text-red-400 text-lg">C°</strong> or <strong className="text-red-400">Cdim7</strong></td>
                               <td className="py-3 text-slate-200">Fully Diminished</td>
                               <td className="py-3 text-slate-400">C - Eb - Gb - A</td>
+                              <td className="py-3"><button disabled={isPlaying} onClick={() => { setSelectedNodes([0, 9, 6, 3]); playChord([0, 9, 6, 3]); }} className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white px-3 py-1 rounded text-xs font-bold transition-colors">▶ Play</button></td>
                             </tr>
                           </tbody>
                         </table>
@@ -609,60 +639,81 @@
                       <p className="mb-4">Musicians use Roman Numerals based on the scale degrees to explain the <strong>function</strong> of a chord. Here are all 7 diatonic (in-key) chords for a Major Scale, what they are historically called, and WHY they act the way they do:</p>
                       
                       <div className="flex flex-col gap-3">
-                        <div className="bg-slate-800 p-4 rounded-lg flex items-center gap-4 border-l-4 border-sky-500">
-                          <span className="text-2xl font-bold text-white w-16 text-center">I</span>
-                          <div>
-                            <strong className="text-sky-300 block">Tonic (Home Base)</strong>
-                            <span className="text-sm">Major. The root of the key. It feels completely resolved and at peace.</span>
+                        <div className="bg-slate-800 p-4 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-4 border-sky-500">
+                          <div className="flex items-center gap-4">
+                            <span className="text-2xl font-bold text-white w-12 sm:w-16 text-center shrink-0">I</span>
+                            <div>
+                              <strong className="text-sky-300 block">Tonic (Home Base)</strong>
+                              <span className="text-sm">Major. The root of the key. It feels completely resolved and at peace.</span>
+                            </div>
                           </div>
+                          <button disabled={isPlaying} onClick={() => { setSelectedNodes([0]); playChord([0]); }} className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-sky-300 px-4 py-2 rounded-lg text-xs font-bold transition-colors shrink-0 shadow-md self-start sm:self-center">▶ Play Tone</button>
                         </div>
                         
-                        <div className="bg-slate-800 p-4 rounded-lg flex items-center gap-4 border-l-4 border-indigo-500">
-                          <span className="text-2xl font-bold text-white w-16 text-center">ii</span>
-                          <div>
-                            <strong className="text-indigo-300 block">Supertonic ("Above the Tonic")</strong>
-                            <span className="text-sm">Minor. It acts as a bridge that strongly leads directly into the V (Dominant) chord.</span>
+                        <div className="bg-slate-800 p-4 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-4 border-indigo-500">
+                          <div className="flex items-center gap-4">
+                            <span className="text-2xl font-bold text-white w-12 sm:w-16 text-center shrink-0">ii</span>
+                            <div>
+                              <strong className="text-indigo-300 block">Supertonic ("Above the Tonic")</strong>
+                              <span className="text-sm">Minor. It acts as a bridge that strongly leads directly into the V (Dominant) chord.</span>
+                            </div>
                           </div>
+                          <button disabled={isPlaying} onClick={() => { setSelectedNodes([2]); playChord([2]); }} className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-indigo-300 px-4 py-2 rounded-lg text-xs font-bold transition-colors shrink-0 shadow-md self-start sm:self-center">▶ Play Tone</button>
                         </div>
 
-                        <div className="bg-slate-800 p-4 rounded-lg flex items-center gap-4 border-l-4 border-blue-400">
-                          <span className="text-2xl font-bold text-white w-16 text-center">iii</span>
-                          <div>
-                            <strong className="text-blue-300 block">Mediant ("In the Middle")</strong>
-                            <span className="text-sm">Minor. Halfway between the Tonic and Dominant. It shares 2 notes with the Tonic, making it sound stable but slightly floaty.</span>
+                        <div className="bg-slate-800 p-4 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-4 border-blue-400">
+                          <div className="flex items-center gap-4">
+                            <span className="text-2xl font-bold text-white w-12 sm:w-16 text-center shrink-0">iii</span>
+                            <div>
+                              <strong className="text-blue-300 block">Mediant ("In the Middle")</strong>
+                              <span className="text-sm">Minor. Halfway between the Tonic and Dominant. It shares 2 notes with the Tonic, making it sound stable but slightly floaty.</span>
+                            </div>
                           </div>
+                          <button disabled={isPlaying} onClick={() => { setSelectedNodes([4]); playChord([4]); }} className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-blue-300 px-4 py-2 rounded-lg text-xs font-bold transition-colors shrink-0 shadow-md self-start sm:self-center">▶ Play Tone</button>
                         </div>
 
-                        <div className="bg-slate-800 p-4 rounded-lg flex items-center gap-4 border-l-4 border-emerald-400">
-                          <span className="text-2xl font-bold text-white w-16 text-center">IV</span>
-                          <div>
-                            <strong className="text-emerald-300 block">Subdominant ("Below Dominant")</strong>
-                            <span className="text-sm">Major. The "away" chord. It wants to wander off or step up to the V chord. Used heavily in Gospel and Rock.</span>
+                        <div className="bg-slate-800 p-4 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-4 border-emerald-400">
+                          <div className="flex items-center gap-4">
+                            <span className="text-2xl font-bold text-white w-12 sm:w-16 text-center shrink-0">IV</span>
+                            <div>
+                              <strong className="text-emerald-300 block">Subdominant ("Below Dominant")</strong>
+                              <span className="text-sm">Major. The "away" chord. It wants to wander off or step up to the V chord. Used heavily in Gospel and Rock.</span>
+                            </div>
                           </div>
+                          <button disabled={isPlaying} onClick={() => { setSelectedNodes([11]); playChord([11]); }} className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-emerald-300 px-4 py-2 rounded-lg text-xs font-bold transition-colors shrink-0 shadow-md self-start sm:self-center">▶ Play Tone</button>
                         </div>
 
-                        <div className="bg-slate-800 p-4 rounded-lg flex items-center gap-4 border-l-4 border-emerald-600">
-                          <span className="text-2xl font-bold text-white w-16 text-center">V</span>
-                          <div>
-                            <strong className="text-emerald-400 block">Dominant (The Engine)</strong>
-                            <span className="text-sm">Major. Contains the "leading tone" of the scale. It creates massive tension that strongly wants to "pull" back home to the I chord.</span>
+                        <div className="bg-slate-800 p-4 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-4 border-emerald-600">
+                          <div className="flex items-center gap-4">
+                            <span className="text-2xl font-bold text-white w-12 sm:w-16 text-center shrink-0">V</span>
+                            <div>
+                              <strong className="text-emerald-400 block">Dominant (The Engine)</strong>
+                              <span className="text-sm">Major. Contains the "leading tone" of the scale. It creates massive tension that strongly wants to "pull" back home to the I chord.</span>
+                            </div>
                           </div>
+                          <button disabled={isPlaying} onClick={() => { setSelectedNodes([1]); playChord([1]); }} className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-emerald-400 px-4 py-2 rounded-lg text-xs font-bold transition-colors shrink-0 shadow-md self-start sm:self-center">▶ Play Tone</button>
                         </div>
 
-                        <div className="bg-slate-800 p-4 rounded-lg flex items-center gap-4 border-l-4 border-slate-500">
-                          <span className="text-2xl font-bold text-white w-16 text-center">vi</span>
-                          <div>
-                            <strong className="text-slate-300 block">Submediant (Relative Minor)</strong>
-                            <span className="text-sm">Minor. The minor equivalent of the Home Base. Often used for "Deceptive Cadences" (going V &rarr; vi instead of V &rarr; I to surprise the listener).</span>
+                        <div className="bg-slate-800 p-4 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-4 border-slate-500">
+                          <div className="flex items-center gap-4">
+                            <span className="text-2xl font-bold text-white w-12 sm:w-16 text-center shrink-0">vi</span>
+                            <div>
+                              <strong className="text-slate-300 block">Submediant (Relative Minor)</strong>
+                              <span className="text-sm">Minor. The minor equivalent of the Home Base. Often used for "Deceptive Cadences" (going V &rarr; vi instead of V &rarr; I to surprise the listener).</span>
+                            </div>
                           </div>
+                          <button disabled={isPlaying} onClick={() => { setSelectedNodes([3]); playChord([3]); }} className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-300 px-4 py-2 rounded-lg text-xs font-bold transition-colors shrink-0 shadow-md self-start sm:self-center">▶ Play Tone</button>
                         </div>
 
-                        <div className="bg-slate-800 p-4 rounded-lg flex items-center gap-4 border-l-4 border-rose-500">
-                          <span className="text-2xl font-bold text-white w-16 text-center">vii&deg;</span>
-                          <div>
-                            <strong className="text-rose-300 block">Leading Tone (or Subtonic in minor)</strong>
-                            <span className="text-sm">Diminished. Extremely unstable. It is basically a V7 chord without the root note. It desperately wants to collapse upward to the Tonic. <em>(Note: In a minor key, the 7th chord is called the Subtonic and is Major: bVII).</em></span>
+                        <div className="bg-slate-800 p-4 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-4 border-rose-500">
+                          <div className="flex items-center gap-4">
+                            <span className="text-2xl font-bold text-white w-12 sm:w-16 text-center shrink-0">vii&deg;</span>
+                            <div>
+                              <strong className="text-rose-300 block">Leading Tone (or Subtonic in minor)</strong>
+                              <span className="text-sm">Diminished. Extremely unstable. It is basically a V7 chord without the root note. It desperately wants to collapse upward to the Tonic. <em>(Note: In a minor key, the 7th chord is called the Subtonic and is Major: bVII).</em></span>
+                            </div>
                           </div>
+                          <button disabled={isPlaying} onClick={() => { setSelectedNodes([5]); playChord([5]); }} className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-rose-300 px-4 py-2 rounded-lg text-xs font-bold transition-colors shrink-0 shadow-md self-start sm:self-center">▶ Play Tone</button>
                         </div>
                       </div>
                     </section>
@@ -687,31 +738,53 @@
 
                       <div className="bg-slate-950 p-5 rounded-xl border border-slate-700 space-y-4">
                         <div>
-                          <strong className="text-sky-300">The 1st Chord (C):</strong> Stack C &rarr; E &rarr; G. <br/>
+                          <div className="flex justify-between items-start md:items-center mb-1">
+                            <strong className="text-sky-300">The 1st Chord (C):</strong>
+                            <button disabled={isPlaying} onClick={() => { setSelectedNodes([0, 4, 1]); playChord([0, 4, 1]); }} className="bg-slate-800 hover:bg-slate-700 text-sky-300 px-3 py-1 rounded text-xs font-bold transition-colors shrink-0 ml-2 border border-slate-700">▶ Play I Chord</button>
+                          </div>
+                          Stack C &rarr; E &rarr; G. <br/>
                           The distance from C to E is a <em>Major 3rd</em> (4 half-steps). Therefore, the I chord is naturally <strong>Major</strong>.
                         </div>
                         <div className="border-t border-slate-800 pt-4">
-                          <strong className="text-indigo-300">The 2nd Chord (D):</strong> Stack D &rarr; F &rarr; A.<br/>
+                          <div className="flex justify-between items-start md:items-center mb-1">
+                            <strong className="text-indigo-300">The 2nd Chord (D):</strong>
+                            <button disabled={isPlaying} onClick={() => { setSelectedNodes([2, 11, 3]); playChord([2, 11, 3]); }} className="bg-slate-800 hover:bg-slate-700 text-indigo-300 px-3 py-1 rounded text-xs font-bold transition-colors shrink-0 ml-2 border border-slate-700">▶ Play ii Chord</button>
+                          </div>
                           Because we can't use F# (it's not in C Major), we must use F natural. The distance from D to F is only a <em>minor 3rd</em> (3 half-steps). Therefore, the ii chord is naturally <strong>Minor</strong>.
                         </div>
                         <div className="border-t border-slate-800 pt-4">
-                          <strong className="text-blue-300">The 3rd Chord (E):</strong> Stack E &rarr; G &rarr; B.<br/>
+                          <div className="flex justify-between items-start md:items-center mb-1">
+                            <strong className="text-blue-300">The 3rd Chord (E):</strong>
+                            <button disabled={isPlaying} onClick={() => { setSelectedNodes([4, 1, 5]); playChord([4, 1, 5]); }} className="bg-slate-800 hover:bg-slate-700 text-blue-300 px-3 py-1 rounded text-xs font-bold transition-colors shrink-0 ml-2 border border-slate-700">▶ Play iii Chord</button>
+                          </div>
                           Again, E to G is a minor 3rd. The iii chord is <strong>Minor</strong>.
                         </div>
                         <div className="border-t border-slate-800 pt-4">
-                          <strong className="text-emerald-300">The 4th Chord (F):</strong> Stack F &rarr; A &rarr; C.<br/>
+                          <div className="flex justify-between items-start md:items-center mb-1">
+                            <strong className="text-emerald-300">The 4th Chord (F):</strong>
+                            <button disabled={isPlaying} onClick={() => { setSelectedNodes([11, 3, 0]); playChord([11, 3, 0]); }} className="bg-slate-800 hover:bg-slate-700 text-emerald-300 px-3 py-1 rounded text-xs font-bold transition-colors shrink-0 ml-2 border border-slate-700">▶ Play IV Chord</button>
+                          </div>
                           F to A is a Major 3rd. The IV chord is <strong>Major</strong>.
                         </div>
                         <div className="border-t border-slate-800 pt-4">
-                          <strong className="text-emerald-500">The 5th Chord (G):</strong> Stack G &rarr; B &rarr; D.<br/>
+                          <div className="flex justify-between items-start md:items-center mb-1">
+                            <strong className="text-emerald-500">The 5th Chord (G):</strong>
+                            <button disabled={isPlaying} onClick={() => { setSelectedNodes([1, 5, 2]); playChord([1, 5, 2]); }} className="bg-slate-800 hover:bg-slate-700 text-emerald-500 px-3 py-1 rounded text-xs font-bold transition-colors shrink-0 ml-2 border border-slate-700">▶ Play V Chord</button>
+                          </div>
                           G to B is a Major 3rd. The V chord is <strong>Major</strong>.
                         </div>
                         <div className="border-t border-slate-800 pt-4">
-                          <strong className="text-slate-400">The 6th Chord (A):</strong> Stack A &rarr; C &rarr; E.<br/>
+                          <div className="flex justify-between items-start md:items-center mb-1">
+                            <strong className="text-slate-400">The 6th Chord (A):</strong>
+                            <button disabled={isPlaying} onClick={() => { setSelectedNodes([3, 0, 4]); playChord([3, 0, 4]); }} className="bg-slate-800 hover:bg-slate-700 text-slate-400 px-3 py-1 rounded text-xs font-bold transition-colors shrink-0 ml-2 border border-slate-700">▶ Play vi Chord</button>
+                          </div>
                           A to C is a minor 3rd. The vi chord is <strong>Minor</strong>.
                         </div>
                         <div className="border-t border-slate-800 pt-4">
-                          <strong className="text-rose-300">The 7th Chord (B):</strong> Stack B &rarr; D &rarr; F.<br/>
+                          <div className="flex justify-between items-start md:items-center mb-1">
+                            <strong className="text-rose-300">The 7th Chord (B):</strong>
+                            <button disabled={isPlaying} onClick={() => { setSelectedNodes([5, 2, 11]); playChord([5, 2, 11]); }} className="bg-slate-800 hover:bg-slate-700 text-rose-300 px-3 py-1 rounded text-xs font-bold transition-colors shrink-0 ml-2 border border-slate-700">▶ Play vii&deg; Chord</button>
+                          </div>
                           B to D is a minor 3rd. D to F is ALSO a minor 3rd. Two minor 3rds stacked creates a <strong>Diminished</strong> chord!
                         </div>
                       </div>
@@ -725,43 +798,64 @@
                       
                       <div className="space-y-4">
                         <div className="bg-slate-800/80 p-4 rounded-lg">
-                          <strong className="text-xl text-white">1. Ionian (The Major Scale)</strong>
+                          <div className="flex justify-between items-start md:items-center mb-1">
+                            <strong className="text-xl text-white">1. Ionian (The Major Scale)</strong>
+                            <button disabled={isPlaying} onClick={() => playModeScale(261.63, [0, 2, 4, 5, 7, 9, 11, 12])} className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white px-3 py-1 rounded text-xs font-bold transition-colors shrink-0 ml-2">▶ Play Scale</button>
+                          </div>
                           <p className="text-sky-300 text-sm mb-1">Scale: C - D - E - F - G - A - B - C</p>
                           <p className="text-sm">Bright, happy, resolved. The standard against which all other modes are measured.</p>
                         </div>
 
                         <div className="bg-slate-800/80 p-4 rounded-lg border-l-4 border-indigo-500">
-                          <strong className="text-xl text-white">2. Dorian</strong>
+                          <div className="flex justify-between items-start md:items-center mb-1">
+                            <strong className="text-xl text-white">2. Dorian</strong>
+                            <button disabled={isPlaying} onClick={() => playModeScale(293.66, [0, 2, 3, 5, 7, 9, 10, 12])} className="bg-indigo-700 hover:bg-indigo-600 disabled:opacity-50 text-white px-3 py-1 rounded text-xs font-bold transition-colors shrink-0 ml-2">▶ Play Scale</button>
+                          </div>
                           <p className="text-indigo-300 text-sm mb-1">Scale: D - E - F - G - A - B - C - D <span className="text-slate-400">(Formula: Minor scale with a raised 6th)</span></p>
                           <p className="text-sm">Smooth, cool, and jazzy. It sounds minor, but the raised 6th gives it a hopeful, floating quality. (Think: Carlos Santana).</p>
                         </div>
 
                         <div className="bg-slate-800/80 p-4 rounded-lg border-l-4 border-orange-500">
-                          <strong className="text-xl text-white">3. Phrygian</strong>
+                          <div className="flex justify-between items-start md:items-center mb-1">
+                            <strong className="text-xl text-white">3. Phrygian</strong>
+                            <button disabled={isPlaying} onClick={() => playModeScale(329.63, [0, 1, 3, 5, 7, 8, 10, 12])} className="bg-orange-700 hover:bg-orange-600 disabled:opacity-50 text-white px-3 py-1 rounded text-xs font-bold transition-colors shrink-0 ml-2">▶ Play Scale</button>
+                          </div>
                           <p className="text-orange-300 text-sm mb-1">Scale: E - F - G - A - B - C - D - E <span className="text-slate-400">(Formula: Minor scale with a flattened 2nd)</span></p>
                           <p className="text-sm">Dark, exotic, and Spanish. That half-step jump right at the beginning (E to F) gives it a very distinct Flamenco or Metal sound.</p>
                         </div>
 
                         <div className="bg-slate-800/80 p-4 rounded-lg border-l-4 border-pink-500">
-                          <strong className="text-xl text-white">4. Lydian</strong>
+                          <div className="flex justify-between items-start md:items-center mb-1">
+                            <strong className="text-xl text-white">4. Lydian</strong>
+                            <button disabled={isPlaying} onClick={() => playModeScale(349.23, [0, 2, 4, 6, 7, 9, 11, 12])} className="bg-pink-700 hover:bg-pink-600 disabled:opacity-50 text-white px-3 py-1 rounded text-xs font-bold transition-colors shrink-0 ml-2">▶ Play Scale</button>
+                          </div>
                           <p className="text-pink-300 text-sm mb-1">Scale: F - G - A - B - C - D - E - F <span className="text-slate-400">(Formula: Major scale with a raised 4th)</span></p>
                           <p className="text-sm">Dreamy, magical, and cinematic. The raised 4th (F to B creates a tritone!) gives it an unresolved, floating-in-space feeling.</p>
                         </div>
 
                         <div className="bg-slate-800/80 p-4 rounded-lg border-l-4 border-yellow-500">
-                          <strong className="text-xl text-white">5. Mixolydian</strong>
+                          <div className="flex justify-between items-start md:items-center mb-1">
+                            <strong className="text-xl text-white">5. Mixolydian</strong>
+                            <button disabled={isPlaying} onClick={() => playModeScale(392.00, [0, 2, 4, 5, 7, 9, 10, 12])} className="bg-yellow-700 hover:bg-yellow-600 disabled:opacity-50 text-white px-3 py-1 rounded text-xs font-bold transition-colors shrink-0 ml-2">▶ Play Scale</button>
+                          </div>
                           <p className="text-yellow-300 text-sm mb-1">Scale: G - A - B - C - D - E - F - G <span className="text-slate-400">(Formula: Major scale with a flattened 7th)</span></p>
                           <p className="text-sm">Bluesy, classic rock. It has the brightness of a major scale, but the flat 7 makes it sound rebellious and ready to groove.</p>
                         </div>
 
                         <div className="bg-slate-800/80 p-4 rounded-lg border-l-4 border-slate-500">
-                          <strong className="text-xl text-white">6. Aeolian (The Natural Minor Scale)</strong>
+                          <div className="flex justify-between items-start md:items-center mb-1">
+                            <strong className="text-xl text-white">6. Aeolian (The Natural Minor Scale)</strong>
+                            <button disabled={isPlaying} onClick={() => playModeScale(440.00, [0, 2, 3, 5, 7, 8, 10, 12])} className="bg-slate-600 hover:bg-slate-500 disabled:opacity-50 text-white px-3 py-1 rounded text-xs font-bold transition-colors shrink-0 ml-2">▶ Play Scale</button>
+                          </div>
                           <p className="text-slate-300 text-sm mb-1">Scale: A - B - C - D - E - F - G - A</p>
                           <p className="text-sm">Sad, emotional, epic. This is the standard minor scale used in almost all sad pop songs and epic movie scores.</p>
                         </div>
 
                         <div className="bg-slate-800/80 p-4 rounded-lg border-l-4 border-red-600">
-                          <strong className="text-xl text-white">7. Locrian</strong>
+                          <div className="flex justify-between items-start md:items-center mb-1">
+                            <strong className="text-xl text-white">7. Locrian</strong>
+                            <button disabled={isPlaying} onClick={() => playModeScale(493.88, [0, 1, 3, 5, 6, 8, 10, 12])} className="bg-red-700 hover:bg-red-600 disabled:opacity-50 text-white px-3 py-1 rounded text-xs font-bold transition-colors shrink-0 ml-2">▶ Play Scale</button>
+                          </div>
                           <p className="text-red-400 text-sm mb-1">Scale: B - C - D - E - F - G - A - B <span className="text-slate-400">(Formula: Minor scale with a flat 2 and flat 5)</span></p>
                           <p className="text-sm">Theoretical and highly unstable. It's the only mode built on a diminished chord, meaning it has no stable "home" base. Rarely used in full songs.</p>
                         </div>
