@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Tonal Theory</title>
+    
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel for compiling JSX in the browser -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // --- MUSIC THEORY CONSTANTS ---
+        const PITCHES = [
+          { name: 'C', freq: 261.63, index: 0, sig: '0' },
+          { name: 'G', freq: 392.00, index: 1, sig: '1#' },
+          { name: 'D', freq: 293.66, index: 2, sig: '2#' },
+          { name: 'A', freq: 440.00, index: 3, sig: '3#' },
+          { name: 'E', freq: 329.63, index: 4, sig: '4#' },
+          { name: 'B/Cb', freq: 493.88, index: 5, sig: '5# / 7b' },
+          { name: 'F#/Gb', freq: 369.99, index: 6, sig: '6# / 6b' },
+          { name: 'Db/C#', freq: 277.18, index: 7, sig: '5b / 7#' },
+          { name: 'Ab', freq: 415.30, index: 8, sig: '4b' },
+          { name: 'Eb', freq: 311.13, index: 9, sig: '3b' },
+          { name: 'Bb', freq: 466.16, index: 10, sig: '2b' },
+          { name: 'F', freq: 349.23, index: 11, sig: '1b' }
+        ];
+
+        const RADIUS = 140;
+        const CENTER = 200;
+        const PITCH_NODES = PITCHES.map((pitch, i) => {
+          const angle = (i * 30 * Math.PI) / 180; 
+          return {
+            ...pitch,
+            x: CENTER + RADIUS * Math.sin(angle),
+            y: CENTER - RADIUS * Math.cos(angle),
+          };
+        });
+
+        // --- AUDIO ENGINE ---
+        let audioCtx = null;
+
+        const playTone = (frequency, duration = 1.5) => {
+          if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          
+          const osc = audioCtx.createOscillator();
+          const gainNode = audioCtx.createGain();
+          
+          osc.type = 'triangle'; 
+          osc.frequency.setValueAtTime(frequency, audioCtx.currentTime);
+          
+          gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+          gainNode.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + 0.05); 
+          gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+          
+          osc.connect(gainNode);
+          gainNode.connect(audioCtx.destination);
+          
+          osc.start();
+          osc.stop(audioCtx.currentTime + duration);
+        };
+
+        const playChord = (indices) => {
+          indices.forEach(index => {
+            playTone(PITCHES[index].freq);
+          });
+        };
+
+        // --- CHORD/INTERVAL DETECTION LOGIC ---
+        const detectHarmony = (selectedIndices) => {
+          if (selectedIndices.length === 0) return { title: "Empty Board", desc: "Select nodes on the circle to build intervals and chords." };
+          
+          if (selectedIndices.length === 1) {
+            return { 
+              title: `Unison (${PITCHES[selectedIndices[0]].name})`, 
+              desc: "A single pure note. Select another to measure the distance (interval) between them." 
+            };
+          }
+
+          if (selectedIndices.length === 2) {
+            let diff = Math.abs(selectedIndices[0] - selectedIndices[1]);
+            if (diff > 6) diff = 12 - diff;
+            
+            const intervals = {
+              1: { name: "Perfect 5th / Perfect 4th", desc: "1 step away. The most stable, consonant interval. Used in 'Power Chords'." },
+              2: { name: "Major 2nd / Minor 7th", desc: "2 steps away. A whole-step. Creates a mild, jazzy tension." },
+              3: { name: "Minor 3rd / Major 6th", desc: "3 steps away. The emotional, darker building block of minor chords." },
+              4: { name: "Major 3rd / Minor 6th", desc: "4 steps away. The bright, happy building block of major chords." },
+              5: { name: "Minor 2nd / Major 7th", desc: "5 steps away. A half-step. High tension, sharp dissonance that wants to resolve." },
+              6: { name: "Tritone (Aug 4th / Dim 5th)", desc: "6 steps away. Exactly opposite on the circle. Maximum tension!" }
+            };
+            return { title: intervals[diff].name, desc: intervals[diff].desc };
+          }
+
+          const arr = [...selectedIndices].sort((a,b) => a-b);
+          const checkShape = (root, ...intervals) => {
+            const contains = (val) => arr.includes((val + 12) % 12);
+            return contains(root) && intervals.every(interval => contains(root + interval));
+          };
+
+          if (selectedIndices.length === 3) {
+            for (let i = 0; i < 12; i++) {
+              if (checkShape(i, 1, 4)) return { title: `${PITCHES[i].name} Major Triad`, desc: "Root + M3 + P5. The 'Scalene' shape leaning right. Bright, happy, and resolved." };
+              if (checkShape(i, 1, 9)) return { title: `${PITCHES[i].name} Minor Triad`, desc: "Root + m3 + P5. The 'Scalene' shape leaning left. Darker, emotional, and complex." };
+              if (checkShape(i, 9, 6)) return { title: `${PITCHES[i].name} Diminished Triad`, desc: "Root + m3 + d5. The 'Wide Base' shape. Highly unstable, spooky, wants to collapse." };
+              if (checkShape(i, 4, 8)) return { title: `${PITCHES[i].name} Augmented Triad`, desc: "Root + M3 + #5. An equilateral triangle! Dreamy, floaty, and unresolved." };
+              if (checkShape(i, 1, 2)) return { title: `${PITCHES[i].name} Sus2 Chord`, desc: "Root + M2 + P5. Open and airy. The 3rd is replaced by a 2nd." };
+              if (checkShape(i, 1, 11)) return { title: `${PITCHES[i].name} Sus4 Chord`, desc: "Root + P4 + P5. Creates a strong 'pull' waiting to resolve to a Major 3rd." };
+            }
+            return { title: "Dissonant Cluster", desc: "A custom 3-note shape. Try moving one point to resolve the tension!" };
+          }
+
+          if (selectedIndices.length === 4) {
+            for (let i = 0; i < 12; i++) {
+              if (checkShape(i, 1, 4, 5)) return { title: `${PITCHES[i].name} Major 7th`, desc: "Major Triad + M7. Smooth, lush, and nostalgic." };
+              if (checkShape(i, 1, 4, 10)) return { title: `${PITCHES[i].name} Dominant 7th`, desc: "Major Triad + m7. The 'Blues' chord. Funky and wants to resolve to a target." };
+              if (checkShape(i, 1, 9, 10)) return { title: `${PITCHES[i].name} Minor 7th`, desc: "Minor Triad + m7. Cool, mellow, and jazzy." };
+              if (checkShape(i, 6, 9, 10)) return { title: `${PITCHES[i].name} Half-Diminished 7th`, desc: "Diminished Triad + m7. Moody and highly unstable. Often used before a V chord." };
+              if (checkShape(i, 3, 6, 9)) return { title: `${PITCHES[i].name} Fully Diminished 7th`, desc: "A perfect square! Symmetrical tension used for dramatic transitions." };
+            }
+            return { title: "Complex 4-Note Chord", desc: "You've built a complex harmony. Listen to the dense interaction of intervals." };
+          }
+
+          if (selectedIndices.length === 5) {
+            for (let i = 0; i < 12; i++) {
+              if (checkShape(i, 1, 2, 4, 5)) return { title: `${PITCHES[i].name} Major 9th`, desc: "Root + M3 + P5 + M7 + M9. Dreamy, floating, and cinematic." };
+              if (checkShape(i, 1, 2, 4, 10)) return { title: `${PITCHES[i].name} Dominant 9th`, desc: "Root + M3 + P5 + m7 + M9. Funky, bluesy, and highly colorful." };
+              if (checkShape(i, 1, 2, 9, 10)) return { title: `${PITCHES[i].name} Minor 9th`, desc: "Root + m3 + P5 + m7 + M9. Deep, emotional, widely used in Neo-Soul." };
+              if (checkShape(i, 1, 2, 3, 4)) return { title: `${PITCHES[i].name} 6/9 Chord`, desc: "Root + M3 + P5 + M6 + M9. A very stable jazz chord often used to end songs." };
+            }
+            return { title: "5-Note Cluster", desc: "A dense harmony. Try looking for the underlying triad inside this shape!" };
+          }
+
+          if (selectedIndices.length === 6) {
+            for (let i = 0; i < 12; i++) {
+              if (checkShape(i, 1, 2, 4, 5, 11)) return { title: `${PITCHES[i].name} Major 11th`, desc: "Major 9th + P11. Incredibly dense. The 11th often clashes intensely with the 3rd." };
+              if (checkShape(i, 1, 2, 9, 10, 11)) return { title: `${PITCHES[i].name} Minor 11th`, desc: "Minor 9th + P11. Lush, mysterious, and wide-open." };
+              if (checkShape(i, 1, 2, 3, 4, 5)) return { title: `${PITCHES[i].name} Major 13th`, desc: "A massive, colorful Jazz chord containing almost the entire scale." };
+              if (checkShape(i, 1, 2, 3, 4, 10)) return { title: `${PITCHES[i].name} Dominant 13th`, desc: "The ultimate big-band jazz chord. Full of rich color and tension." };
+            }
+            return { title: "6-Note Cluster", desc: "You're playing half of the chromatic scale! This is highly dense." };
+          }
+
+          return { title: "Too Many Notes", desc: "Clear the board. Keep it to 6 notes maximum for analysis." };
+        };
+
+        // --- MAIN COMPONENT ---
+        function App() {
+          const [selectedNodes, setSelectedNodes] = useState([]);
+          const [isPlaying, setIsPlaying] = useState(false);
+          const [activeTab, setActiveTab] = useState('interactive'); // 'interactive', 'circle', 'chords', 'modes'
+          const [showSigs, setShowSigs] = useState(false);
+
+          const harmonyInfo = detectHarmony(selectedNodes);
+
+          const handleNodeClick = (index) => {
+            let newSelection;
+            if (selectedNodes.includes(index)) {
+              newSelection = selectedNodes.filter(i => i !== index);
+            } else {
+              if (selectedNodes.length >= 6) {
+                newSelection = [...selectedNodes.slice(1), index]; 
+              } else {
+                newSelection = [...selectedNodes, index];
+              }
+              playTone(PITCHES[index].freq);
+            }
+            setSelectedNodes(newSelection);
+          };
+
+          const playProgression = async (sequence) => {
+            if (isPlaying) return;
+            setIsPlaying(true);
+            
+            for (let i = 0; i < sequence.length; i++) {
+              setSelectedNodes(sequence[i]);
+              playChord(sequence[i]);
+              await new Promise(r => setTimeout(r, 1400)); 
+            }
+            setIsPlaying(false);
+          };
+
+          return (
+            <div className="p-4 md:p-8 flex flex-col items-center">
+              
+              {/* Header & Tabs */}
+              <div className="w-full max-w-5xl mb-8">
+                <h1 className="text-3xl md:text-4xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-sky-400 to-indigo-400 mb-6 text-center">
+                  Interactive Tonal Theory
+                </h1>
+                
+                <div className="flex justify-center space-x-2 md:space-x-4 border-b border-slate-800 pb-2 flex-wrap gap-y-2">
+                  <button 
+                    onClick={() => setActiveTab('interactive')}
+                    className={`px-4 py-2 rounded-t-lg font-semibold transition-colors ${activeTab === 'interactive' ? 'bg-slate-800 text-sky-400 border-b-2 border-sky-400' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'}`}
+                  >
+                    The Canvas
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('circle')}
+                    className={`px-4 py-2 rounded-t-lg font-semibold transition-colors ${activeTab === 'circle' ? 'bg-slate-800 text-sky-400 border-b-2 border-sky-400' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'}`}
+                  >
+                    Decoding The Circle
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('chords')}
+                    className={`px-4 py-2 rounded-t-lg font-semibold transition-colors ${activeTab === 'chords' ? 'bg-slate-800 text-sky-400 border-b-2 border-sky-400' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'}`}
+                  >
+                    Chords & Intervals
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('modes')}
+                    className={`px-4 py-2 rounded-t-lg font-semibold transition-colors ${activeTab === 'modes' ? 'bg-slate-800 text-sky-400 border-b-2 border-sky-400' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'}`}
+                  >
+                    Modes & Scales
+                  </button>
+                </div>
+              </div>
+
+              {/* TAB CONTENT: INTERACTIVE CANVAS */}
+              {activeTab === 'interactive' && (
+                <div className="flex flex-col lg:flex-row gap-8 items-start w-full max-w-5xl justify-center">
+                  
+                  {/* LEFT: SVG CIRCLE */}
+                  <div className="flex-shrink-0 relative w-full max-w-[450px] aspect-square bg-slate-900 rounded-3xl shadow-2xl p-6 border border-slate-800 mx-auto">
+                    <svg viewBox="0 0 400 400" className="w-full h-full overflow-visible">
+                      <circle cx={CENTER} cy={CENTER} r={RADIUS} fill="none" stroke="#334155" strokeWidth="2" strokeDasharray="5,5" />
+                      
+                      {/* Draw Interval Line */}
+                      {selectedNodes.length === 2 && (
+                        <line 
+                          x1={PITCH_NODES[selectedNodes[0]].x} y1={PITCH_NODES[selectedNodes[0]].y}
+                          x2={PITCH_NODES[selectedNodes[1]].x} y2={PITCH_NODES[selectedNodes[1]].y}
+                          stroke="#38bdf8" strokeWidth="4" className="drop-shadow-[0_0_8px_rgba(56,189,248,0.8)]"
+                        />
+                      )}
+
+                      {/* Draw Triad Polygon */}
+                      {selectedNodes.length >= 3 && (
+                        <polygon 
+                          points={[...selectedNodes].sort((a,b) => a-b).map(i => `${PITCH_NODES[i].x},${PITCH_NODES[i].y}`).join(' ')}
+                          fill={
+                            selectedNodes.length === 3 ? "rgba(56, 189, 248, 0.2)" : 
+                            selectedNodes.length === 4 ? "rgba(167, 139, 250, 0.2)" :
+                            "rgba(244, 114, 182, 0.2)"
+                          }
+                          stroke={
+                            selectedNodes.length === 3 ? "#38bdf8" : 
+                            selectedNodes.length === 4 ? "#a78bfa" : 
+                            "#f472b6"
+                          } 
+                          strokeWidth="4"
+                          className={
+                            selectedNodes.length === 3 ? "drop-shadow-[0_0_12px_rgba(56,189,248,0.6)]" : 
+                            selectedNodes.length === 4 ? "drop-shadow-[0_0_12px_rgba(167,139,250,0.6)]" :
+                            "drop-shadow-[0_0_12px_rgba(244,114,182,0.6)]"
+                          }
+                          strokeLinejoin="round"
+                        />
+                      )}
+
+                      {/* Draw Nodes */}
+                      {PITCH_NODES.map((node) => {
+                        const isSelected = selectedNodes.includes(node.index);
+                        return (
+                          <g key={node.name} className="cursor-pointer transition-transform hover:scale-110" onClick={() => handleNodeClick(node.index)}>
+                            <circle 
+                              cx={node.x} cy={node.y} r="22" 
+                              fill={isSelected ? (selectedNodes.length >= 5 ? "#db2777" : selectedNodes.length === 4 ? "#8b5cf6" : "#0ea5e9") : "#1e293b"}
+                              stroke={isSelected ? (selectedNodes.length >= 5 ? "#fbcfe8" : selectedNodes.length === 4 ? "#c4b5fd" : "#bae6fd") : "#475569"} 
+                              strokeWidth="3"
+                              className="transition-all duration-300"
+                            />
+                            <text 
+                              x={node.x} y={node.y} 
+                              textAnchor="middle" dy={showSigs ? "-0.1em" : ".3em"} 
+                              fill={isSelected ? "#ffffff" : "#94a3b8"}
+                              className={`font-bold select-none pointer-events-none transition-all ${node.name.length > 2 ? 'text-[11px]' : 'text-lg'}`}
+                            >
+                              {node.name}
+                            </text>
+                            {showSigs && (
+                              <text 
+                                x={node.x} y={node.y} 
+                                textAnchor="middle" dy="1.4em" 
+                                fill={isSelected ? "#e2e8f0" : "#64748b"}
+                                className="font-medium text-[9px] select-none pointer-events-none transition-all"
+                              >
+                                {node.sig}
+                              </text>
+                            )}
+                          </g>
+                        );
+                      })}
+                    </svg>
+
+                    <div className="absolute bottom-6 right-6 flex flex-col gap-2">
+                      <button 
+                        onClick={() => setShowSigs(!showSigs)}
+                        className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-slate-700 shadow-md"
+                      >
+                        {showSigs ? "Hide Key Sigs" : "Show Key Sigs"}
+                      </button>
+                      <button 
+                        onClick={() => setSelectedNodes([])}
+                        className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-slate-700 shadow-md"
+                      >
+                        Clear Board
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* RIGHT: CONTROLS & READOUT */}
+                  <div className="flex flex-col max-w-md w-full space-y-6 mx-auto">
+                    <div className="bg-slate-800 rounded-xl p-5 border border-slate-700 shadow-inner h-36 flex flex-col justify-center transition-all relative">
+                      <h2 className="text-xl font-bold text-sky-300 mb-1">{harmonyInfo.title}</h2>
+                      <p className="text-slate-300 text-sm leading-relaxed">{harmonyInfo.desc}</p>
+                      
+                      <button 
+                        onClick={() => playChord(selectedNodes)}
+                        disabled={selectedNodes.length === 0}
+                        className="absolute bottom-3 right-3 bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700/50 disabled:text-slate-500 text-white px-4 py-1.5 rounded-lg text-sm font-bold transition-colors shadow"
+                      >
+                        Play Chord
+                      </button>
+                    </div>
+
+                    <div className="space-y-3">
+                      <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Automated Lessons</h3>
+                      
+                      <button disabled={isPlaying} onClick={() => playProgression([[0,4,1], [1,5,2], [0,4,1]])} className="w-full text-left p-4 rounded-xl bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 hover:border-sky-500/50 transition-all group disabled:opacity-50">
+                        <div className="flex justify-between items-center">
+                          <span className="font-bold text-slate-200">The "Pop Song" (I - V - I)</span>
+                          <span className="text-xs bg-sky-900 text-sky-300 px-2 py-1 rounded group-hover:bg-sky-500 group-hover:text-white transition-colors">Play</span>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-1">C Major &rarr; G Major &rarr; C Major. Watch the shape slide exactly one wedge to the right (Perfect 5th) and return home.</p>
+                      </button>
+
+                      <button disabled={isPlaying} onClick={() => playProgression([[0,4,1], [3,0,4]])} className="w-full text-left p-4 rounded-xl bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 hover:border-sky-500/50 transition-all group disabled:opacity-50">
+                        <div className="flex justify-between items-center">
+                          <span className="font-bold text-slate-200">Relative Minor (I - vi)</span>
+                          <span className="text-xs bg-sky-900 text-sky-300 px-2 py-1 rounded group-hover:bg-sky-500 group-hover:text-white transition-colors">Play</span>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-1">C Major to A Minor. Notice how only ONE point changes! They share 2 out of 3 notes.</p>
+                      </button>
+
+                      <button disabled={isPlaying} onClick={() => playProgression([[2,11,3], [1,5,2], [0,4,1]])} className="w-full text-left p-4 rounded-xl bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 hover:border-sky-500/50 transition-all group disabled:opacity-50">
+                        <div className="flex justify-between items-center">
+                          <span className="font-bold text-slate-200">Jazz Standard (ii - V - I)</span>
+                          <span className="text-xs bg-sky-900 text-sky-300 px-2 py-1 rounded group-hover:bg-sky-500 group-hover:text-white transition-colors">Play</span>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-1">D minor &rarr; G Major &rarr; C Major. Watch the root notes fall counter-clockwise to resolve.</p>
+                      </button>
+
+                      <button disabled={isPlaying} onClick={() => playProgression([[0,1,11], [0,4,1]])} className="w-full text-left p-4 rounded-xl bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 hover:border-sky-500/50 transition-all group disabled:opacity-50">
+                        <div className="flex justify-between items-center">
+                          <span className="font-bold text-slate-200">The "Suspense" (sus4 - I)</span>
+                          <span className="text-xs bg-sky-900 text-sky-300 px-2 py-1 rounded group-hover:bg-sky-500 group-hover:text-white transition-colors">Play</span>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-1">C Sus4 to C Major. Feel how the grouped cluster wants to "breathe out" into the Major triangle.</p>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB CONTENT: THE CIRCLE EXPLAINED */}
+              {activeTab === 'circle' && (
+                <div className="w-full max-w-4xl bg-slate-900 rounded-2xl p-6 md:p-10 border border-slate-800 shadow-xl leading-relaxed text-slate-300 mx-auto">
+                  <h2 className="text-2xl font-bold text-sky-400 mb-6 border-b border-slate-700 pb-2">Decoding The Circle of Fifths</h2>
+                  
+                  <div className="space-y-6">
+                    <section>
+                      <h3 className="text-xl font-semibold text-white mb-2">What is it?</h3>
+                      <p>The Circle of Fifths is the ultimate cheat code in music theory. Instead of arranging notes in alphabetical order (C, D, E, F, G), it arranges them by their <strong>harmonic relationship</strong>. It looks like a clock, but instead of tracking time, it tracks musical "gravity."</p>
+                    </section>
+
+                    <section>
+                      <h3 className="text-xl font-semibold text-white mb-2">Why "Fifths"?</h3>
+                      <p>Pick any note on the circle. If you move exactly one space clockwise, you are moving up an interval called a <strong>Perfect 5th</strong>. </p>
+                      <ul className="list-disc list-inside mt-2 space-y-1 ml-4 text-slate-400">
+                        <li>Start at <strong>C</strong> (12 o'clock).</li>
+                        <li>Go right one space to <strong>G</strong>. G is the 5th note of the C scale.</li>
+                        <li>Go right one space to <strong>D</strong>. D is the 5th note of the G scale.</li>
+                      </ul>
+                      <p className="mt-2">If you go <em>counter-clockwise</em>, you move up a <strong>Perfect 4th</strong> (which is the exact opposite of a 5th).</p>
+                    </section>
+
+                    <section>
+                      <h3 className="text-xl font-semibold text-white mb-2">Key Signatures (The Sharp and Flat Machine)</h3>
+                      <p>The circle tells you exactly how many Sharps (♯) or Flats (♭) are in a key.</p>
+                      <div className="bg-slate-800 p-4 rounded-lg mt-3 border border-slate-700">
+                        <p><strong>Right Side (Sharps):</strong> C has 0 sharps. Move right to G; G has 1 sharp. Move to D; D has 2 sharps. Move to A; A has 3 sharps. It goes up by one every step!</p>
+                        <p className="mt-2 border-t border-slate-700 pt-2"><strong>Left Side (Flats):</strong> Move left from C to F; F has 1 flat. Move to Bb; Bb has 2 flats. Move to Eb; Eb has 3 flats.</p>
+                      </div>
+                    </section>
+
+                    <section>
+                      <h3 className="text-xl font-semibold text-white mb-2">Predicting Chords</h3>
+                      <p>In any Pop, Rock, or Classical song, the most common chords used will <em>always</em> be grouped right next to each other on the circle. If you are writing a song in C Major, the two most important supporting chords are its immediate neighbors: <strong>F Major</strong> (left) and <strong>G Major</strong> (right).</p>
+                    </section>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB CONTENT: CHORDS & INTERVALS */}
+              {activeTab === 'chords' && (
+                <div className="w-full max-w-4xl bg-slate-900 rounded-2xl p-6 md:p-10 border border-slate-800 shadow-xl leading-relaxed text-slate-300 mx-auto">
+                  <h2 className="text-3xl font-bold text-sky-400 mb-2">The Ultimate Chord Decoder</h2>
+                  <p className="text-slate-400 mb-8 border-b border-slate-700 pb-4">A complete breakdown of chords, symbols, and functional harmony rules.</p>
+                  
+                  <div className="space-y-10">
+                    
+                    {/* Section 1: The Basics */}
+                    <section>
+                      <h3 className="text-2xl font-semibold text-white mb-4">1. The Basic Triad (3 Notes)</h3>
+                      <p className="mb-4">All chords are built by stacking intervals (distances between notes). The foundation of western music is the <strong>Triad</strong> (Root, 3rd, and 5th).</p>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="bg-slate-800/80 p-5 rounded-xl border border-sky-500/30">
+                          <h4 className="text-sky-300 font-bold text-lg mb-2">Major & Minor</h4>
+                          <ul className="space-y-2 text-sm">
+                            <li><strong className="text-white">Major:</strong> Root + M3 + P5. Happy, bright.</li>
+                            <li><strong className="text-white">Minor:</strong> Root + m3 + P5. Sad, emotional.</li>
+                          </ul>
+                        </div>
+                        <div className="bg-slate-800/80 p-5 rounded-xl border border-indigo-500/30">
+                          <h4 className="text-indigo-300 font-bold text-lg mb-2">Diminished & Augmented</h4>
+                          <ul className="space-y-2 text-sm">
+                            <li><strong className="text-white">Diminished:</strong> Root + m3 + d5. Spooky, tense.</li>
+                            <li><strong className="text-white">Augmented:</strong> Root + M3 + #5. Dreamy, floating.</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </section>
+
+                    {/* Section: The Tritone */}
+                    <section className="bg-red-900/20 p-6 md:p-8 rounded-xl border border-red-500/30 relative overflow-hidden">
+                      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                        <h3 className="text-2xl md:text-3xl font-bold text-red-400">The Tritone: The Engine of Tension</h3>
+                        <button 
+                          onClick={() => playChord([0, 6])} 
+                          className="bg-red-600 hover:bg-red-500 text-white px-5 py-2.5 rounded-lg shadow-lg shadow-red-900/50 font-bold text-sm whitespace-nowrap transition-transform active:scale-95"
+                        >
+                          ▶ Play a Tritone
+                        </button>
+                      </div>
+                      
+                      <p className="mb-6 text-slate-300 leading-relaxed text-lg">
+                        A tritone is an interval spanning exactly three whole tones (6 half-steps). It cuts the 12-tone octave perfectly in half. While historically referred to in Latin as <em>diabolus in musica</em> due to its jarring sound, today we understand it as the ultimate "engine" of musical movement.
+                      </p>
+                      
+                      <div className="space-y-6 text-sm text-slate-300">
+                        <div className="bg-slate-950/50 p-4 rounded-lg border-l-4 border-red-500">
+                          <strong className="text-white block text-lg mb-1">The Historical Consequences</strong>
+                          In the Middle Ages and Renaissance, sacred music was written to reflect divine perfection, peace, and order. The strict rules of early harmony forbade the tritone entirely. Singing or writing this interval could result in a musician's work being outright banned, or a singer being dismissed from the choir for disrupting the "divine order" of the music!
+                        </div>
+                        
+                        <div className="bg-slate-950/50 p-4 rounded-lg border-l-4 border-orange-500">
+                          <strong className="text-white block text-lg mb-1">Why it was physically impossible to play</strong>
+                          Before the invention of modern tuning (called "Equal Temperament"), instruments were tuned using ancient methods like "Pythagorean Tuning," which relied on pure, simple mathematical fractions. The tritone is such a complex ratio that it mathematically did not fit. If you tried to play a tritone on an ancient instrument, the sound waves would physically clash, creating a harsh, pulsing "wobble" (called beating) that was genuinely painful to human ears. It wasn't until tuning systems were slightly altered centuries later that the tritone could be played cleanly.
+                        </div>
+                        
+                        <div className="bg-slate-950/50 p-4 rounded-lg border-l-4 border-sky-500">
+                          <strong className="text-white block text-lg mb-1">Its Modern Function</strong>
+                          Today, it is the absolute engine that drives modern harmony. The tension in a Dominant 7th chord (like G7) comes entirely from the tritone hidden inside it. That specific tension is what makes a chord "want" to pull so strongly back to the Home Base (Tonic).
+                        </div>
+                      </div>
+                    </section>
+
+                    {/* Section 2: Symbol Dictionary */}
+                    <section>
+                      <h3 className="text-2xl font-semibold text-white mb-4">2. Decoding Chord Symbols</h3>
+                      <p className="mb-4">Jazz and pop musicians use shorthand symbols so they can read music incredibly fast. Here is your translation guide:</p>
+                      
+                      <div className="bg-slate-950 p-6 rounded-xl border border-slate-700 overflow-hidden">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="border-b border-slate-800 text-slate-400">
+                              <th className="pb-3 w-1/3">Symbol Seen</th>
+                              <th className="pb-3 w-1/3">What it Means</th>
+                              <th className="pb-3">Example Notes (in C)</th>
+                            </tr>
+                          </thead>
+                          <tbody className="text-sm">
+                            <tr className="border-b border-slate-800/50 hover:bg-slate-900 transition-colors">
+                              <td className="py-3"><strong className="text-sky-400 text-lg">C∆7</strong> or <strong className="text-sky-400">Cmaj7</strong></td>
+                              <td className="py-3 text-slate-200">Major 7th Chord</td>
+                              <td className="py-3 text-slate-400">C - E - G - B</td>
+                            </tr>
+                            <tr className="border-b border-slate-800/50 hover:bg-slate-900 transition-colors">
+                              <td className="py-3"><strong className="text-indigo-400 text-lg">C-7</strong> or <strong className="text-indigo-400">Cmin7</strong></td>
+                              <td className="py-3 text-slate-200">Minor 7th Chord</td>
+                              <td className="py-3 text-slate-400">C - Eb - G - Bb</td>
+                            </tr>
+                            <tr className="border-b border-slate-800/50 hover:bg-slate-900 transition-colors">
+                              <td className="py-3"><strong className="text-pink-400 text-lg">C7</strong> <span className="text-xs text-slate-500">(no "maj" or "min")</span></td>
+                              <td className="py-3 text-slate-200">Dominant 7th Chord</td>
+                              <td className="py-3 text-slate-400">C - E - G - Bb</td>
+                            </tr>
+                            <tr className="border-b border-slate-800/50 hover:bg-slate-900 transition-colors">
+                              <td className="py-3"><strong className="text-purple-400 text-lg">Cø</strong> or <strong className="text-purple-400">Cm7b5</strong></td>
+                              <td className="py-3 text-slate-200">Half-Diminished</td>
+                              <td className="py-3 text-slate-400">C - Eb - Gb - Bb</td>
+                            </tr>
+                            <tr className="hover:bg-slate-900 transition-colors">
+                              <td className="py-3"><strong className="text-red-400 text-lg">C°</strong> or <strong className="text-red-400">Cdim7</strong></td>
+                              <td className="py-3 text-slate-200">Fully Diminished</td>
+                              <td className="py-3 text-slate-400">C - Eb - Gb - A</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </section>
+
+                    {/* Section 3: Extended Chords FAQ */}
+                    <section className="bg-sky-900/10 p-6 rounded-xl border border-sky-500/20">
+                      <h3 className="text-2xl font-semibold text-white mb-4">3. Extended Chords (9ths, 11ths, 13ths)</h3>
+                      
+                      <div className="space-y-6">
+                        <div>
+                          <h4 className="text-sky-300 font-bold mb-1">Q: Why do we call them 9, 11, and 13 if a scale only has 7 notes?</h4>
+                          <p className="text-sm">A: Because music works in loops! If you build a chord by stacking alternating notes (C - E - G - B), you run out of notes in the octave at the 7th. If you keep stacking past the octave, you hit the 2nd note of the scale again. We call it the <strong>9th</strong> because 8 (the octave) + 1 step = 9. <br/><br/>
+                          • The <strong>9th</strong> is just a <strong>2nd</strong> played an octave higher.<br/>
+                          • The <strong>11th</strong> is just a <strong>4th</strong> played an octave higher.<br/>
+                          • The <strong>13th</strong> is just a <strong>6th</strong> played an octave higher.
+                          </p>
+                        </div>
+
+                        <div className="border-t border-sky-800/50 pt-4">
+                          <h4 className="text-sky-300 font-bold mb-1">Q: What is the difference between Cmaj9 and C9?</h4>
+                          <p className="text-sm">A: This is the most common mistake! <br/>
+                          • <strong>Cmaj9:</strong> This implies a "Major 7th" chord with an added 9. (C - E - G - <strong>B</strong> - D). It sounds lush and pretty.<br/>
+                          • <strong>C9:</strong> If there is no "maj" or "min", the chord is <strong>Dominant by default</strong>. It implies a "Dominant 7th" chord with an added 9. (C - E - G - <strong>Bb</strong> - D). It sounds funky, bluesy, and wants to resolve.</p>
+                        </div>
+
+                        <div className="border-t border-sky-800/50 pt-4">
+                          <h4 className="text-sky-300 font-bold mb-1">Q: Do I have to play all 6 or 7 notes for a 13th chord?</h4>
+                          <p className="text-sm">A: No! If you played every note of a C13 chord, it would sound like a muddy mess. Jazz pianists routinely "drop" the 5th and the 11th from large extended chords. The most important notes to determine the chord's identity are the <strong>3rd and 7th</strong>.</p>
+                        </div>
+                      </div>
+                    </section>
+
+                    {/* Section 4: Roman Numerals */}
+                    <section>
+                      <h3 className="text-2xl font-semibold text-white mb-4">4. Roman Numeral Analysis</h3>
+                      <p className="mb-4">Musicians use Roman Numerals based on the scale degrees to explain the <strong>function</strong> of a chord. Here are all 7 diatonic (in-key) chords for a Major Scale, what they are historically called, and WHY they act the way they do:</p>
+                      
+                      <div className="flex flex-col gap-3">
+                        <div className="bg-slate-800 p-4 rounded-lg flex items-center gap-4 border-l-4 border-sky-500">
+                          <span className="text-2xl font-bold text-white w-16 text-center">I</span>
+                          <div>
+                            <strong className="text-sky-300 block">Tonic (Home Base)</strong>
+                            <span className="text-sm">Major. The root of the key. It feels completely resolved and at peace.</span>
+                          </div>
+                        </div>
+                        
+                        <div className="bg-slate-800 p-4 rounded-lg flex items-center gap-4 border-l-4 border-indigo-500">
+                          <span className="text-2xl font-bold text-white w-16 text-center">ii</span>
+                          <div>
+                            <strong className="text-indigo-300 block">Supertonic ("Above the Tonic")</strong>
+                            <span className="text-sm">Minor. It acts as a bridge that strongly leads directly into the V (Dominant) chord.</span>
+                          </div>
+                        </div>
+
+                        <div className="bg-slate-800 p-4 rounded-lg flex items-center gap-4 border-l-4 border-blue-400">
+                          <span className="text-2xl font-bold text-white w-16 text-center">iii</span>
+                          <div>
+                            <strong className="text-blue-300 block">Mediant ("In the Middle")</strong>
+                            <span className="text-sm">Minor. Halfway between the Tonic and Dominant. It shares 2 notes with the Tonic, making it sound stable but slightly floaty.</span>
+                          </div>
+                        </div>
+
+                        <div className="bg-slate-800 p-4 rounded-lg flex items-center gap-4 border-l-4 border-emerald-400">
+                          <span className="text-2xl font-bold text-white w-16 text-center">IV</span>
+                          <div>
+                            <strong className="text-emerald-300 block">Subdominant ("Below Dominant")</strong>
+                            <span className="text-sm">Major. The "away" chord. It wants to wander off or step up to the V chord. Used heavily in Gospel and Rock.</span>
+                          </div>
+                        </div>
+
+                        <div className="bg-slate-800 p-4 rounded-lg flex items-center gap-4 border-l-4 border-emerald-600">
+                          <span className="text-2xl font-bold text-white w-16 text-center">V</span>
+                          <div>
+                            <strong className="text-emerald-400 block">Dominant (The Engine)</strong>
+                            <span className="text-sm">Major. Contains the "leading tone" of the scale. It creates massive tension that strongly wants to "pull" back home to the I chord.</span>
+                          </div>
+                        </div>
+
+                        <div className="bg-slate-800 p-4 rounded-lg flex items-center gap-4 border-l-4 border-slate-500">
+                          <span className="text-2xl font-bold text-white w-16 text-center">vi</span>
+                          <div>
+                            <strong className="text-slate-300 block">Submediant (Relative Minor)</strong>
+                            <span className="text-sm">Minor. The minor equivalent of the Home Base. Often used for "Deceptive Cadences" (going V &rarr; vi instead of V &rarr; I to surprise the listener).</span>
+                          </div>
+                        </div>
+
+                        <div className="bg-slate-800 p-4 rounded-lg flex items-center gap-4 border-l-4 border-rose-500">
+                          <span className="text-2xl font-bold text-white w-16 text-center">vii&deg;</span>
+                          <div>
+                            <strong className="text-rose-300 block">Leading Tone (or Subtonic in minor)</strong>
+                            <span className="text-sm">Diminished. Extremely unstable. It is basically a V7 chord without the root note. It desperately wants to collapse upward to the Tonic. <em>(Note: In a minor key, the 7th chord is called the Subtonic and is Major: bVII).</em></span>
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+
+                  </div>
+                </div>
+              )}
+
+              {/* TAB CONTENT: MODES & SCALES */}
+              {activeTab === 'modes' && (
+                <div className="w-full max-w-4xl bg-slate-900 rounded-2xl p-6 md:p-10 border border-slate-800 shadow-xl leading-relaxed text-slate-300 mx-auto">
+                  <h2 className="text-3xl font-bold text-sky-400 mb-2">Modes & Diatonic Harmony</h2>
+                  <p className="text-slate-400 mb-8 border-b border-slate-700 pb-4">Unlocking the secrets of the Major Scale and its 7 alter-egos.</p>
+                  
+                  <div className="space-y-10">
+                    
+                    {/* The Diatonic Math */}
+                    <section>
+                      <h3 className="text-2xl font-semibold text-white mb-4">Why are some chords Major and some Minor?</h3>
+                      <p className="mb-4">It all comes down to musical math and the rules of the key signature. Let's look at <strong>C Major (C, D, E, F, G, A, B)</strong>. There are no sharps and no flats.</p>
+                      <p className="mb-4">To build a chord, we stack every other note (Root, 3rd, 5th). We MUST use only the notes in the C Major scale. Let's see what happens naturally:</p>
+
+                      <div className="bg-slate-950 p-5 rounded-xl border border-slate-700 space-y-4">
+                        <div>
+                          <strong className="text-sky-300">The 1st Chord (C):</strong> Stack C &rarr; E &rarr; G. <br/>
+                          The distance from C to E is a <em>Major 3rd</em> (4 half-steps). Therefore, the I chord is naturally <strong>Major</strong>.
+                        </div>
+                        <div className="border-t border-slate-800 pt-4">
+                          <strong className="text-indigo-300">The 2nd Chord (D):</strong> Stack D &rarr; F &rarr; A.<br/>
+                          Because we can't use F# (it's not in C Major), we must use F natural. The distance from D to F is only a <em>minor 3rd</em> (3 half-steps). Therefore, the ii chord is naturally <strong>Minor</strong>.
+                        </div>
+                        <div className="border-t border-slate-800 pt-4">
+                          <strong className="text-blue-300">The 3rd Chord (E):</strong> Stack E &rarr; G &rarr; B.<br/>
+                          Again, E to G is a minor 3rd. The iii chord is <strong>Minor</strong>.
+                        </div>
+                        <div className="border-t border-slate-800 pt-4">
+                          <strong className="text-emerald-300">The 4th Chord (F):</strong> Stack F &rarr; A &rarr; C.<br/>
+                          F to A is a Major 3rd. The IV chord is <strong>Major</strong>.
+                        </div>
+                        <div className="border-t border-slate-800 pt-4">
+                          <strong className="text-emerald-500">The 5th Chord (G):</strong> Stack G &rarr; B &rarr; D.<br/>
+                          G to B is a Major 3rd. The V chord is <strong>Major</strong>.
+                        </div>
+                        <div className="border-t border-slate-800 pt-4">
+                          <strong className="text-slate-400">The 6th Chord (A):</strong> Stack A &rarr; C &rarr; E.<br/>
+                          A to C is a minor 3rd. The vi chord is <strong>Minor</strong>.
+                        </div>
+                        <div className="border-t border-slate-800 pt-4">
+                          <strong className="text-rose-300">The 7th Chord (B):</strong> Stack B &rarr; D &rarr; F.<br/>
+                          B to D is a minor 3rd. D to F is ALSO a minor 3rd. Two minor 3rds stacked creates a <strong>Diminished</strong> chord!
+                        </div>
+                      </div>
+                      <p className="mt-4 text-sm text-sky-400 text-center font-bold">This natural pattern applies to EVERY major key: I (Maj), ii (min), iii (min), IV (Maj), V (Maj), vi (min), vii&deg; (Dim).</p>
+                    </section>
+
+                    {/* The 7 Modes */}
+                    <section className="bg-sky-900/10 p-6 rounded-xl border border-sky-500/20">
+                      <h3 className="text-2xl font-semibold text-white mb-4">What are Modes?</h3>
+                      <p className="mb-4">Modes are just the Major Scale, but starting on a different note. If you play the white keys on a piano from C to C, you get a happy Major scale. But if you play the exact same white keys starting from D to D, the "Root" has changed. You are now playing a completely different mood called a Mode.</p>
+                      
+                      <div className="space-y-4">
+                        <div className="bg-slate-800/80 p-4 rounded-lg">
+                          <strong className="text-xl text-white">1. Ionian (The Major Scale)</strong>
+                          <p className="text-sky-300 text-sm mb-1">Scale: C - D - E - F - G - A - B - C</p>
+                          <p className="text-sm">Bright, happy, resolved. The standard against which all other modes are measured.</p>
+                        </div>
+
+                        <div className="bg-slate-800/80 p-4 rounded-lg border-l-4 border-indigo-500">
+                          <strong className="text-xl text-white">2. Dorian</strong>
+                          <p className="text-indigo-300 text-sm mb-1">Scale: D - E - F - G - A - B - C - D <span className="text-slate-400">(Formula: Minor scale with a raised 6th)</span></p>
+                          <p className="text-sm">Smooth, cool, and jazzy. It sounds minor, but the raised 6th gives it a hopeful, floating quality. (Think: Carlos Santana).</p>
+                        </div>
+
+                        <div className="bg-slate-800/80 p-4 rounded-lg border-l-4 border-orange-500">
+                          <strong className="text-xl text-white">3. Phrygian</strong>
+                          <p className="text-orange-300 text-sm mb-1">Scale: E - F - G - A - B - C - D - E <span className="text-slate-400">(Formula: Minor scale with a flattened 2nd)</span></p>
+                          <p className="text-sm">Dark, exotic, and Spanish. That half-step jump right at the beginning (E to F) gives it a very distinct Flamenco or Metal sound.</p>
+                        </div>
+
+                        <div className="bg-slate-800/80 p-4 rounded-lg border-l-4 border-pink-500">
+                          <strong className="text-xl text-white">4. Lydian</strong>
+                          <p className="text-pink-300 text-sm mb-1">Scale: F - G - A - B - C - D - E - F <span className="text-slate-400">(Formula: Major scale with a raised 4th)</span></p>
+                          <p className="text-sm">Dreamy, magical, and cinematic. The raised 4th (F to B creates a tritone!) gives it an unresolved, floating-in-space feeling.</p>
+                        </div>
+
+                        <div className="bg-slate-800/80 p-4 rounded-lg border-l-4 border-yellow-500">
+                          <strong className="text-xl text-white">5. Mixolydian</strong>
+                          <p className="text-yellow-300 text-sm mb-1">Scale: G - A - B - C - D - E - F - G <span className="text-slate-400">(Formula: Major scale with a flattened 7th)</span></p>
+                          <p className="text-sm">Bluesy, classic rock. It has the brightness of a major scale, but the flat 7 makes it sound rebellious and ready to groove.</p>
+                        </div>
+
+                        <div className="bg-slate-800/80 p-4 rounded-lg border-l-4 border-slate-500">
+                          <strong className="text-xl text-white">6. Aeolian (The Natural Minor Scale)</strong>
+                          <p className="text-slate-300 text-sm mb-1">Scale: A - B - C - D - E - F - G - A</p>
+                          <p className="text-sm">Sad, emotional, epic. This is the standard minor scale used in almost all sad pop songs and epic movie scores.</p>
+                        </div>
+
+                        <div className="bg-slate-800/80 p-4 rounded-lg border-l-4 border-red-600">
+                          <strong className="text-xl text-white">7. Locrian</strong>
+                          <p className="text-red-400 text-sm mb-1">Scale: B - C - D - E - F - G - A - B <span className="text-slate-400">(Formula: Minor scale with a flat 2 and flat 5)</span></p>
+                          <p className="text-sm">Theoretical and highly unstable. It's the only mode built on a diminished chord, meaning it has no stable "home" base. Rarely used in full songs.</p>
+                        </div>
+                      </div>
+                    </section>
+
+                  </div>
+                </div>
+              )}
+
+            </div>
+          );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
