@@ -79,87 +79,117 @@
 
         // --- CHORD/INTERVAL DETECTION LOGIC ---
         const detectHarmony = (selectedIndices) => {
-          if (selectedIndices.length === 0) return { title: "Empty Board", desc: "Select nodes on the circle to build intervals and chords." };
-          
-          if (selectedIndices.length === 1) {
-            return { 
-              title: `Unison (${PITCHES[selectedIndices[0]].name})`, 
-              desc: "A single pure note. Select another to measure the distance (interval) between them." 
-            };
-          }
-
-          if (selectedIndices.length === 2) {
-            let diff = Math.abs(selectedIndices[0] - selectedIndices[1]);
-            if (diff > 6) diff = 12 - diff;
-            
-            const intervals = {
-              1: { name: "Perfect 5th / Perfect 4th", desc: "1 step away. The most stable, consonant interval. Used in 'Power Chords'." },
-              2: { name: "Major 2nd / Minor 7th", desc: "2 steps away. A whole-step. Creates a mild, jazzy tension." },
-              3: { name: "Minor 3rd / Major 6th", desc: "3 steps away. The emotional, darker building block of minor chords." },
-              4: { name: "Major 3rd / Minor 6th", desc: "4 steps away. The bright, happy building block of major chords." },
-              5: { name: "Minor 2nd / Major 7th", desc: "5 steps away. A half-step. High tension, sharp dissonance that wants to resolve." },
-              6: { name: "Tritone (Aug 4th / Dim 5th)", desc: "6 steps away. Exactly opposite on the circle. Maximum tension!" }
-            };
-            return { title: intervals[diff].name, desc: intervals[diff].desc };
-          }
-
           const arr = [...selectedIndices].sort((a,b) => a-b);
           const checkShape = (root, ...intervals) => {
             const contains = (val) => arr.includes((val + 12) % 12);
             return contains(root) && intervals.every(interval => contains(root + interval));
           };
 
-          if (selectedIndices.length === 3) {
-            for (let i = 0; i < 12; i++) {
-              if (checkShape(i, 1, 4)) return { title: `${PITCHES[i].name} Major Triad`, desc: "Root + M3 + P5. The 'Scalene' shape leaning right. Bright, happy, and resolved." };
-              if (checkShape(i, 1, 9)) return { title: `${PITCHES[i].name} Minor Triad`, desc: "Root + m3 + P5. The 'Scalene' shape leaning left. Darker, emotional, and complex." };
-              if (checkShape(i, 9, 6)) return { title: `${PITCHES[i].name} Diminished Triad`, desc: "Root + m3 + d5. The 'Wide Base' shape. Highly unstable, spooky, wants to collapse." };
-              if (checkShape(i, 4, 8)) return { title: `${PITCHES[i].name} Augmented Triad`, desc: "Root + M3 + #5. An equilateral triangle! Dreamy, floaty, and unresolved." };
-              if (checkShape(i, 1, 2)) return { title: `${PITCHES[i].name} Sus2 Chord`, desc: "Root + M2 + P5. Open and airy. The 3rd is replaced by a 2nd." };
-              if (checkShape(i, 1, 11)) return { title: `${PITCHES[i].name} Sus4 Chord`, desc: "Root + P4 + P5. Creates a strong 'pull' waiting to resolve to a Major 3rd." };
+          const getHarmony = () => {
+            if (selectedIndices.length === 0) return { title: "Empty Board", desc: "Select nodes on the circle to build intervals and chords." };
+            
+            if (selectedIndices.length === 1) {
+              return { 
+                title: `Unison (${PITCHES[selectedIndices[0]].name.split('/')[0]})`, 
+                desc: "A single pure note. Select another to measure the distance (interval) between them." 
+              };
             }
-            return { title: "Dissonant Cluster", desc: "A custom 3-note shape. Try moving one point to resolve the tension!" };
-          }
 
-          if (selectedIndices.length === 4) {
-            for (let i = 0; i < 12; i++) {
-              if (checkShape(i, 1, 4, 5)) return { title: `${PITCHES[i].name} Major 7th`, desc: "Major Triad + M7. Smooth, lush, and nostalgic." };
-              if (checkShape(i, 1, 4, 10)) return { title: `${PITCHES[i].name} Dominant 7th`, desc: "Major Triad + m7. The 'Blues' chord. Funky and wants to resolve to a target." };
-              if (checkShape(i, 1, 9, 10)) return { title: `${PITCHES[i].name} Minor 7th`, desc: "Minor Triad + m7. Cool, mellow, and jazzy." };
-              if (checkShape(i, 6, 9, 10)) return { title: `${PITCHES[i].name} Half-Diminished 7th`, desc: "Diminished Triad + m7. Moody and highly unstable. Often used before a V chord." };
-              if (checkShape(i, 3, 6, 9)) return { title: `${PITCHES[i].name} Fully Diminished 7th`, desc: "A perfect square! Symmetrical tension used for dramatic transitions." };
+            if (selectedIndices.length === 2) {
+              let diff = Math.abs(selectedIndices[0] - selectedIndices[1]);
+              if (diff > 6) diff = 12 - diff;
+              
+              const intervals = {
+                1: { name: "Perfect 5th / Perfect 4th", desc: "1 step away. The most stable, consonant interval. Used in 'Power Chords'." },
+                2: { name: "Major 2nd / Minor 7th", desc: "2 steps away. A whole-step. Creates a mild, jazzy tension." },
+                3: { name: "Minor 3rd / Major 6th", desc: "3 steps away. The emotional, darker building block of minor chords." },
+                4: { name: "Major 3rd / Minor 6th", desc: "4 steps away. The bright, happy building block of major chords." },
+                5: { name: "Minor 2nd / Major 7th", desc: "5 steps away. A half-step. High tension, sharp dissonance that wants to resolve." },
+                6: { name: "Tritone (Aug 4th / Dim 5th)", desc: "6 steps away. Exactly opposite on the circle. Maximum tension!" }
+              };
+              return { title: intervals[diff].name, desc: intervals[diff].desc };
             }
-            return { title: "Complex 4-Note Chord", desc: "You've built a complex harmony. Listen to the dense interaction of intervals." };
-          }
 
-          if (selectedIndices.length === 5) {
-            for (let i = 0; i < 12; i++) {
-              if (checkShape(i, 1, 2, 4, 5)) return { title: `${PITCHES[i].name} Major 9th`, desc: "Root + M3 + P5 + M7 + M9. Dreamy, floating, and cinematic." };
-              if (checkShape(i, 1, 2, 4, 10)) return { title: `${PITCHES[i].name} Dominant 9th`, desc: "Root + M3 + P5 + m7 + M9. Funky, bluesy, and highly colorful." };
-              if (checkShape(i, 1, 2, 9, 10)) return { title: `${PITCHES[i].name} Minor 9th`, desc: "Root + m3 + P5 + m7 + M9. Deep, emotional, widely used in Neo-Soul." };
-              if (checkShape(i, 1, 2, 3, 4)) return { title: `${PITCHES[i].name} 6/9 Chord`, desc: "Root + M3 + P5 + M6 + M9. A very stable jazz chord often used to end songs." };
+            if (selectedIndices.length === 3) {
+              for (let i = 0; i < 12; i++) {
+                const rootName = PITCHES[i].name.split('/')[0];
+                if (checkShape(i, 1, 4)) return { title: `${rootName} Major Triad`, desc: "Root + M3 + P5. The 'Scalene' shape leaning right. Bright, happy, and resolved." };
+                if (checkShape(i, 1, 9)) return { title: `${rootName} Minor Triad`, desc: "Root + m3 + P5. The 'Scalene' shape leaning left. Darker, emotional, and complex." };
+                if (checkShape(i, 9, 6)) return { title: `${rootName} Diminished Triad`, desc: "Root + m3 + d5. The 'Wide Base' shape. Highly unstable, spooky, wants to collapse." };
+                if (checkShape(i, 4, 8)) return { title: `${rootName} Augmented Triad`, desc: "Root + M3 + #5. An equilateral triangle! Dreamy, floaty, and unresolved." };
+                if (checkShape(i, 1, 2)) return { title: `${rootName} Sus2 Chord`, desc: "Root + M2 + P5. Open and airy. The 3rd is replaced by a 2nd." };
+                if (checkShape(i, 1, 11)) return { title: `${rootName} Sus4 Chord`, desc: "Root + P4 + P5. Creates a strong 'pull' waiting to resolve to a Major 3rd." };
+              }
+              return { title: "Dissonant Cluster", desc: "A custom 3-note shape. Try moving one point to resolve the tension!" };
             }
-            return { title: "5-Note Cluster", desc: "A dense harmony. Try looking for the underlying triad inside this shape!" };
-          }
 
-          if (selectedIndices.length === 6) {
-            for (let i = 0; i < 12; i++) {
-              if (checkShape(i, 1, 2, 4, 5, 11)) return { title: `${PITCHES[i].name} Major 11th`, desc: "Major 9th + P11. Incredibly dense. The 11th often clashes intensely with the 3rd." };
-              if (checkShape(i, 1, 2, 9, 10, 11)) return { title: `${PITCHES[i].name} Minor 11th`, desc: "Minor 9th + P11. Lush, mysterious, and wide-open." };
-              if (checkShape(i, 1, 2, 3, 4, 5)) return { title: `${PITCHES[i].name} Major 13th`, desc: "A massive, colorful Jazz chord containing almost the entire scale." };
-              if (checkShape(i, 1, 2, 3, 4, 10)) return { title: `${PITCHES[i].name} Dominant 13th`, desc: "The ultimate big-band jazz chord. Full of rich color and tension." };
+            if (selectedIndices.length === 4) {
+              for (let i = 0; i < 12; i++) {
+                const rootName = PITCHES[i].name.split('/')[0];
+                if (checkShape(i, 1, 4, 5)) return { title: `${rootName} Major 7th`, desc: "Major Triad + M7. Smooth, lush, and nostalgic." };
+                if (checkShape(i, 1, 4, 10)) return { title: `${rootName} Dominant 7th`, desc: "Major Triad + m7. The 'Blues' chord. Funky and wants to resolve to a target." };
+                if (checkShape(i, 1, 9, 10)) return { title: `${rootName} Minor 7th`, desc: "Minor Triad + m7. Cool, mellow, and jazzy." };
+                if (checkShape(i, 6, 9, 10)) return { title: `${rootName} Half-Diminished 7th`, desc: "Diminished Triad + m7. Moody and highly unstable. Often used before a V chord." };
+                if (checkShape(i, 3, 6, 9)) return { title: `${rootName} Fully Diminished 7th`, desc: "A perfect square! Symmetrical tension used for dramatic transitions." };
+              }
+              return { title: "Complex 4-Note Chord", desc: "You've built a complex harmony. Listen to the dense interaction of intervals." };
             }
-            return { title: "6-Note Cluster", desc: "You're playing half of the chromatic scale! This is highly dense." };
-          }
 
-          return { title: "Too Many Notes", desc: "Clear the board. Keep it to 6 notes maximum for analysis." };
+            if (selectedIndices.length === 5) {
+              for (let i = 0; i < 12; i++) {
+                const rootName = PITCHES[i].name.split('/')[0];
+                if (checkShape(i, 1, 2, 4, 5)) return { title: `${rootName} Major 9th`, desc: "Root + M3 + P5 + M7 + M9. Dreamy, floating, and cinematic." };
+                if (checkShape(i, 1, 2, 4, 10)) return { title: `${rootName} Dominant 9th`, desc: "Root + M3 + P5 + m7 + M9. Funky, bluesy, and highly colorful." };
+                if (checkShape(i, 1, 2, 9, 10)) return { title: `${rootName} Minor 9th`, desc: "Root + m3 + P5 + m7 + M9. Deep, emotional, widely used in Neo-Soul." };
+                if (checkShape(i, 1, 2, 3, 4)) return { title: `${rootName} 6/9 Chord`, desc: "Root + M3 + P5 + M6 + M9. A very stable jazz chord often used to end songs." };
+              }
+              return { title: "5-Note Cluster", desc: "A dense harmony. Try looking for the underlying triad inside this shape!" };
+            }
+
+            if (selectedIndices.length === 6) {
+              for (let i = 0; i < 12; i++) {
+                const rootName = PITCHES[i].name.split('/')[0];
+                if (checkShape(i, 1, 2, 4, 5, 11)) return { title: `${rootName} Major 11th`, desc: "Major 9th + P11. Incredibly dense. The 11th often clashes intensely with the 3rd." };
+                if (checkShape(i, 1, 2, 9, 10, 11)) return { title: `${rootName} Minor 11th`, desc: "Minor 9th + P11. Lush, mysterious, and wide-open." };
+                if (checkShape(i, 1, 2, 3, 4, 5)) return { title: `${rootName} Major 13th`, desc: "A massive, colorful Jazz chord containing almost the entire scale." };
+                if (checkShape(i, 1, 2, 3, 4, 10)) return { title: `${rootName} Dominant 13th`, desc: "The ultimate big-band jazz chord. Full of rich color and tension." };
+              }
+              return { title: "6-Note Cluster", desc: "You're playing half of the chromatic scale! This is highly dense." };
+            }
+
+            if (selectedIndices.length === 7) {
+              for (let i = 0; i < 12; i++) {
+                const rootName = PITCHES[i].name.split('/')[0];
+                if (checkShape(i, 1, 2, 3, 4, 5, 11)) return { title: `${rootName} Major Scale (Ionian)`, desc: "All 7 diatonic notes of the Major scale. Forms a massive 13th chord if played together." };
+                if (checkShape(i, 1, 2, 3, 4, 10, 11)) return { title: `${rootName} Mixolydian Mode`, desc: "Major scale with a flat 7. The foundation for dominant 13th chords." };
+                if (checkShape(i, 1, 2, 3, 9, 10, 11)) return { title: `${rootName} Dorian Mode`, desc: "Minor scale with a raised 6th. Often used for minor 13th chords." };
+                if (checkShape(i, 1, 2, 8, 9, 10, 11)) return { title: `${rootName} Natural Minor (Aeolian)`, desc: "The standard minor scale." };
+              }
+              return { title: "7-Note Cluster / Scale", desc: "A dense 7-note harmony. Listen to the interaction of all these notes." };
+            }
+
+            if (selectedIndices.length === 8) {
+              return { title: "8-Note Cluster", desc: "You've selected 8 notes! At this density, the harmony becomes extremely thick and chromatic." };
+            }
+
+            return { title: "Too Many Notes", desc: "Clear the board. Keep it to 8 notes maximum for analysis." };
+          };
+
+          const result = getHarmony();
+          
+          // Generate the exact spelling based on the order notes were clicked
+          if (selectedIndices.length > 0) {
+             result.spelling = selectedIndices.map(i => PITCHES[i].name.split('/')[0]).join(' - ');
+          }
+          
+          return result;
         };
 
         // --- MAIN COMPONENT ---
         function App() {
           const [selectedNodes, setSelectedNodes] = useState([]);
           const [isPlaying, setIsPlaying] = useState(false);
-          const [activeTab, setActiveTab] = useState('interactive'); // 'interactive', 'circle', 'chords', 'modes'
+          const [activeTab, setActiveTab] = useState('interactive'); 
           const [showSigs, setShowSigs] = useState(false);
 
           const harmonyInfo = detectHarmony(selectedNodes);
@@ -169,7 +199,8 @@
             if (selectedNodes.includes(index)) {
               newSelection = selectedNodes.filter(i => i !== index);
             } else {
-              if (selectedNodes.length >= 6) {
+              // Now allowing up to 8 notes
+              if (selectedNodes.length >= 8) {
                 newSelection = [...selectedNodes.slice(1), index]; 
               } else {
                 newSelection = [...selectedNodes, index];
@@ -253,17 +284,20 @@
                           fill={
                             selectedNodes.length === 3 ? "rgba(56, 189, 248, 0.2)" : 
                             selectedNodes.length === 4 ? "rgba(167, 139, 250, 0.2)" :
+                            selectedNodes.length >= 7 ? "rgba(234, 88, 12, 0.2)" :
                             "rgba(244, 114, 182, 0.2)"
                           }
                           stroke={
                             selectedNodes.length === 3 ? "#38bdf8" : 
                             selectedNodes.length === 4 ? "#a78bfa" : 
+                            selectedNodes.length >= 7 ? "#f97316" :
                             "#f472b6"
                           } 
                           strokeWidth="4"
                           className={
                             selectedNodes.length === 3 ? "drop-shadow-[0_0_12px_rgba(56,189,248,0.6)]" : 
                             selectedNodes.length === 4 ? "drop-shadow-[0_0_12px_rgba(167,139,250,0.6)]" :
+                            selectedNodes.length >= 7 ? "drop-shadow-[0_0_12px_rgba(234,88,12,0.6)]" :
                             "drop-shadow-[0_0_12px_rgba(244,114,182,0.6)]"
                           }
                           strokeLinejoin="round"
@@ -277,8 +311,18 @@
                           <g key={node.name} className="cursor-pointer transition-transform hover:scale-110" onClick={() => handleNodeClick(node.index)}>
                             <circle 
                               cx={node.x} cy={node.y} r="22" 
-                              fill={isSelected ? (selectedNodes.length >= 5 ? "#db2777" : selectedNodes.length === 4 ? "#8b5cf6" : "#0ea5e9") : "#1e293b"}
-                              stroke={isSelected ? (selectedNodes.length >= 5 ? "#fbcfe8" : selectedNodes.length === 4 ? "#c4b5fd" : "#bae6fd") : "#475569"} 
+                              fill={isSelected ? (
+                                selectedNodes.length >= 7 ? "#ea580c" : 
+                                selectedNodes.length >= 5 ? "#db2777" : 
+                                selectedNodes.length === 4 ? "#8b5cf6" : 
+                                "#0ea5e9"
+                              ) : "#1e293b"}
+                              stroke={isSelected ? (
+                                selectedNodes.length >= 7 ? "#fed7aa" : 
+                                selectedNodes.length >= 5 ? "#fbcfe8" : 
+                                selectedNodes.length === 4 ? "#c4b5fd" : 
+                                "#bae6fd"
+                              ) : "#475569"} 
                               strokeWidth="3"
                               className="transition-all duration-300"
                             />
@@ -323,10 +367,17 @@
 
                   {/* RIGHT: CONTROLS & READOUT */}
                   <div className="flex flex-col max-w-md w-full space-y-6 mx-auto">
-                    <div className="bg-slate-800 rounded-xl p-5 border border-slate-700 shadow-inner h-36 flex flex-col justify-center transition-all relative">
+                    <div className="bg-slate-800 rounded-xl p-5 border border-slate-700 shadow-inner h-40 flex flex-col justify-center transition-all relative">
                       <h2 className="text-xl font-bold text-sky-300 mb-1">{harmonyInfo.title}</h2>
                       <p className="text-slate-300 text-sm leading-relaxed">{harmonyInfo.desc}</p>
                       
+                      {/* Note Spelling Output */}
+                      {harmonyInfo.spelling && (
+                        <p className="text-emerald-400 text-xs font-bold mt-2 pt-2 border-t border-slate-700/50 tracking-wider">
+                          Notes: {harmonyInfo.spelling}
+                        </p>
+                      )}
+
                       <button 
                         onClick={() => playChord(selectedNodes)}
                         disabled={selectedNodes.length === 0}
