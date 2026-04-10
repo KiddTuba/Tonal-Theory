@@ -37,6 +37,25 @@
           { name: 'F', freq: 349.23, index: 11, sig: '1b' }
         ];
 
+        // Map Circle index to true Pitch Class (0=C, 1=Db/C#... 11=B)
+        const PITCH_CLASSES = [0, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10, 5];
+
+        // Map Circle index to SVG Treble Staff Y-Coordinates
+        const STAFF_MAP = {
+            0:  { y: 95, acc: null, ledger: true }, // C4
+            1:  { y: 65, acc: null }, // G4
+            2:  { y: 87.5, acc: null }, // D4
+            3:  { y: 57.5, acc: null }, // A4
+            4:  { y: 80, acc: null }, // E4
+            5:  { y: 50, acc: null }, // B4
+            6:  { y: 72.5, acc: '#' },  // F#4
+            7:  { y: 87.5, acc: 'b' },  // Db4
+            8:  { y: 57.5, acc: 'b' },  // Ab4
+            9:  { y: 80, acc: 'b' },  // Eb4
+            10: { y: 50, acc: 'b' },  // Bb4
+            11: { y: 72.5, acc: null }  // F4
+        };
+
         const RADIUS = 140;
         const CENTER = 200;
         const PITCH_NODES = PITCHES.map((pitch, i) => {
@@ -53,7 +72,6 @@
 
         const playTone = (frequency, duration = 1.5) => {
           if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-          
           const osc = audioCtx.createOscillator();
           const gainNode = audioCtx.createGain();
           
@@ -77,111 +95,243 @@
           });
         };
 
-        // --- CHORD/INTERVAL DETECTION LOGIC ---
+        // --- THE ULTIMATE CHORD SPELLER LOGIC ---
         const detectHarmony = (selectedIndices) => {
-          const arr = [...selectedIndices].sort((a,b) => a-b);
-          const checkShape = (root, ...intervals) => {
-            const contains = (val) => arr.includes((val + 12) % 12);
-            return contains(root) && intervals.every(interval => contains(root + interval));
-          };
-
           const getHarmony = () => {
-            if (selectedIndices.length === 0) return { title: "Empty Board", desc: "Select nodes on the circle to build intervals and chords." };
+            if (selectedIndices.length === 0) return { title: "Empty Board", desc: "Select notes on the circle to build intervals and chords." };
+            if (selectedIndices.length === 1) return { title: `Unison (${PITCHES[selectedIndices[0]].name.split('/')[0]})`, desc: "A single pure note. Select more to build a chord." };
             
-            if (selectedIndices.length === 1) {
-              return { 
-                title: `Unison (${PITCHES[selectedIndices[0]].name.split('/')[0]})`, 
-                desc: "A single pure note. Select another to measure the distance (interval) between them." 
-              };
-            }
-
             if (selectedIndices.length === 2) {
               let diff = Math.abs(selectedIndices[0] - selectedIndices[1]);
               if (diff > 6) diff = 12 - diff;
-              
               const intervals = {
-                1: { name: "Perfect 5th / Perfect 4th", desc: "1 step away. The most stable, consonant interval. Used in 'Power Chords'." },
-                2: { name: "Major 2nd / Minor 7th", desc: "2 steps away. A whole-step. Creates a mild, jazzy tension." },
-                3: { name: "Minor 3rd / Major 6th", desc: "3 steps away. The emotional, darker building block of minor chords." },
-                4: { name: "Major 3rd / Minor 6th", desc: "4 steps away. The bright, happy building block of major chords." },
-                5: { name: "Minor 2nd / Major 7th", desc: "5 steps away. A half-step. High tension, sharp dissonance that wants to resolve." },
+                1: { name: "Perfect 5th / Perfect 4th", desc: "1 step away. The most stable, consonant interval." },
+                2: { name: "Major 2nd / Minor 7th", desc: "2 steps away. Creates a mild, jazzy tension." },
+                3: { name: "Minor 3rd / Major 6th", desc: "3 steps away. The emotional building block of minor chords." },
+                4: { name: "Major 3rd / Minor 6th", desc: "4 steps away. The bright building block of major chords." },
+                5: { name: "Minor 2nd / Major 7th", desc: "5 steps away. High tension, sharp dissonance." },
                 6: { name: "Tritone (Aug 4th / Dim 5th)", desc: "6 steps away. Exactly opposite on the circle. Maximum tension!" }
               };
               return { title: intervals[diff].name, desc: intervals[diff].desc };
             }
 
-            if (selectedIndices.length === 3) {
-              for (let i = 0; i < 12; i++) {
-                const rootName = PITCHES[i].name.split('/')[0];
-                if (checkShape(i, 1, 4)) return { title: `${rootName} Major Triad`, desc: "Root + M3 + P5. The 'Scalene' shape leaning right. Bright, happy, and resolved." };
-                if (checkShape(i, 1, 9)) return { title: `${rootName} Minor Triad`, desc: "Root + m3 + P5. The 'Scalene' shape leaning left. Darker, emotional, and complex." };
-                if (checkShape(i, 9, 6)) return { title: `${rootName} Diminished Triad`, desc: "Root + m3 + d5. The 'Wide Base' shape. Highly unstable, spooky, wants to collapse." };
-                if (checkShape(i, 4, 8)) return { title: `${rootName} Augmented Triad`, desc: "Root + M3 + #5. An equilateral triangle! Dreamy, floaty, and unresolved." };
-                if (checkShape(i, 1, 2)) return { title: `${rootName} Sus2 Chord`, desc: "Root + M2 + P5. Open and airy. The 3rd is replaced by a 2nd." };
-                if (checkShape(i, 1, 11)) return { title: `${rootName} Sus4 Chord`, desc: "Root + P4 + P5. Creates a strong 'pull' waiting to resolve to a Major 3rd." };
-              }
-              return { title: "Dissonant Cluster", desc: "A custom 3-note shape. Try moving one point to resolve the tension!" };
+            // --- 3+ NOTES: EXACT CHORD SPELLER ---
+            const semitones = selectedIndices.map(idx => PITCH_CLASSES[idx]);
+
+            // This function mathematically spells a chord given a strict Root note
+            const spellChord = (rootIdx, indicesArray) => {
+                const rootPitch = PITCH_CLASSES[rootIdx];
+                const rootName = PITCHES[rootIdx].name.split('/')[0];
+                const intervals = indicesArray.map(idx => (PITCH_CLASSES[idx] - rootPitch + 12) % 12);
+                const has = (i) => intervals.includes(i);
+                
+                const b2=has(1), M2=has(2), m3=has(3), M3=has(4), P4=has(5), d5=has(6), P5=has(7), m6=has(8), M6=has(9), m7=has(10), M7=has(11);
+                
+                let base = "", seventh = "", alts = [], omits = [];
+                let isMaj = M3, isMin = m3 && !M3, isSus4 = P4 && !M3 && !m3, isSus2 = M2 && !M3 && !m3 && !P4;
+                let isDim = isMin && d5 && !P5, isAug = M3 && m6 && !P5; 
+                let no3 = !M3 && !m3 && !isSus4 && !isSus2;
+                
+                // 1. Determine Core Triad & 7th Quality
+                if (isMaj && P5) { base = ""; }
+                else if (isMin && P5) { base = "m"; }
+                else if (isDim) { base = "dim"; }
+                else if (isAug) { base = "aug"; }
+                else if (isSus4 && P5) { base = "sus4"; }
+                else if (isSus2 && P5) { base = "sus2"; }
+                else if (P5 && no3) { base = "5"; }
+                else if (isMaj && !P5) { base = ""; }
+                else if (isMin && !P5) { base = "m"; }
+                else { base = "(no3)"; }
+
+                if (m7) {
+                    if (base === "dim") seventh = "m7b5";
+                    else if (base === "aug") seventh = "7#5";
+                    else if (base === "") seventh = "7";
+                    else if (base === "m") seventh = "m7";
+                    else if (base === "sus4") seventh = "7sus4";
+                    else if (base === "sus2") seventh = "7sus2";
+                    else if (base === "5" || base === "(no3)") seventh = "7";
+                } else if (M7) {
+                    if (base === "aug") seventh = "maj7#5";
+                    else if (base === "") seventh = "maj7";
+                    else if (base === "m") seventh = "m(maj7)";
+                    else if (base === "sus4") seventh = "maj7sus4";
+                    else if (base === "5" || base === "(no3)") seventh = "maj7";
+                } else if (M6 && base === "dim") {
+                    seventh = "dim7";
+                }
+
+                let chordType = seventh || base;
+                let isBase7 = seventh !== "";
+                if (chordType === "(no3)") chordType = ""; 
+
+                // 2. Handle Extensions (9, 11, 13)
+                let highestExt = 0;
+                if (isBase7) {
+                    if (M2) highestExt = 9;
+                    if (P4 && !isSus4) highestExt = 11;
+                    if (M6 && base !== "dim" && base !== "aug") highestExt = 13;
+                    
+                    if (highestExt > 0) {
+                        if (chordType.includes("maj7")) chordType = chordType.replace("maj7", "maj" + highestExt);
+                        else if (chordType.includes("m7b5")) chordType = chordType.replace("m7b5", "m" + highestExt + "b5");
+                        else if (chordType.includes("m7")) chordType = chordType.replace("m7", "m" + highestExt);
+                        else if (chordType.includes("7sus4")) chordType = chordType.replace("7sus4", highestExt + "sus4");
+                        else if (chordType.includes("7")) chordType = chordType.replace("7", highestExt);
+                    }
+                }
+                
+                // 3. Handle Additions
+                if (!isBase7 && M6 && base !== "dim" && base !== "aug") {
+                    if (M2) chordType = (base === "m") ? "m6/9" : "6/9";
+                    else chordType = (base === "m") ? "m6" : "6";
+                } else if (M6 && !isBase7 && base !== "dim" && base !== "aug") {
+                    alts.push("add6");
+                }
+
+                if (M2 && highestExt < 9 && chordType !== "sus2" && !chordType.includes("6/9")) alts.push("add9");
+                if (P4 && highestExt < 11 && chordType !== "sus4") alts.push("add11");
+
+                // 4. Handle Alterations
+                if (b2 && base !== "dim") alts.push("b9");
+                if (m3 && isMaj) alts.push("#9");
+                if (d5 && base !== "dim") {
+                    if (isBase7 || P5 || isMaj) alts.push("#11");
+                    else alts.push("b5");
+                }
+                if (m6 && base !== "aug") {
+                    if (isBase7 || P5) alts.push("b13");
+                    else alts.push("#5");
+                }
+                
+                // 5. Handle Omissions
+                if (!P5 && base !== "dim" && base !== "aug" && base !== "5" && !chordType.includes("b5")) omits.push("no5");
+                if (no3 && base !== "5" && !chordType.includes("no3")) omits.push("no3");
+
+                let name = rootName + chordType;
+                if (alts.length > 0) name += `(${alts.join(',')})`;
+                if (omits.length > 0) name += ` ${omits.join(' ')}`;
+                
+                // --- STRICT SCORING ALGORITHM ---
+                let expected = [0];
+                if (isMaj) expected.push(4);
+                if (isMin) expected.push(3);
+                if (P5 || base === "5") expected.push(7);
+                if (base === "dim") expected.push(3, 6);
+                if (base === "aug") expected.push(4, 8);
+                if (chordType.includes("sus4")) expected.push(5);
+                if (chordType.includes("sus2")) expected.push(2);
+                if (m7) expected.push(10);
+                if (M7) expected.push(11);
+                if (chordType.includes("dim7") || chordType.includes("6")) expected.push(9);
+                if (highestExt >= 9) expected.push(2);
+                if (highestExt >= 11) expected.push(5);
+                if (highestExt >= 13) expected.push(9);
+                
+                alts.forEach(a => {
+                    if(a==="b9") expected.push(1);
+                    if(a==="#9") expected.push(3);
+                    if(a==="#11"||a==="b5") expected.push(6);
+                    if(a==="b13"||a==="#5") expected.push(8);
+                    if(a==="add9") expected.push(2);
+                    if(a==="add11") expected.push(5);
+                    if(a==="add6") expected.push(9);
+                });
+
+                let unaccounted = intervals.filter(i => !expected.includes(i));
+
+                let score = 100;
+                if (no3 && base !== "5") score -= 30; // Penalize lack of identity
+                if (!P5 && base !== "dim" && base !== "aug") score -= 10;
+                score -= unaccounted.length * 40; // Heavy penalty for missing notes
+                score -= alts.length * 10;
+                score -= omits.length * 5;
+
+                if (isMaj || isMin) score += 15;
+                if (isBase7) score += 10;
+
+                return { name: name.trim(), score: score };
+            };
+
+            // ---- EVALUATE ALL COMBINATIONS ----
+            let interpretations = [];
+
+            // 1. Check all nodes as potential roots
+            for (let i = 0; i < selectedIndices.length; i++) {
+                interpretations.push(spellChord(selectedIndices[i], selectedIndices));
             }
 
-            if (selectedIndices.length === 4) {
-              for (let i = 0; i < 12; i++) {
-                const rootName = PITCHES[i].name.split('/')[0];
-                if (checkShape(i, 1, 4, 5)) return { title: `${rootName} Major 7th`, desc: "Major Triad + M7. Smooth, lush, and nostalgic." };
-                if (checkShape(i, 1, 4, 10)) return { title: `${rootName} Dominant 7th`, desc: "Major Triad + m7. The 'Blues' chord. Funky and wants to resolve to a target." };
-                if (checkShape(i, 1, 9, 10)) return { title: `${rootName} Minor 7th`, desc: "Minor Triad + m7. Cool, mellow, and jazzy." };
-                if (checkShape(i, 6, 9, 10)) return { title: `${rootName} Half-Diminished 7th`, desc: "Diminished Triad + m7. Moody and highly unstable. Often used before a V chord." };
-                if (checkShape(i, 3, 6, 9)) return { title: `${rootName} Fully Diminished 7th`, desc: "A perfect square! Symmetrical tension used for dramatic transitions." };
-              }
-              return { title: "Complex 4-Note Chord", desc: "You've built a complex harmony. Listen to the dense interaction of intervals." };
+            // 2. Check Slash Chords
+            const triMaj = [0, 4, 7];
+            const triMin = [0, 3, 7];
+            
+            for (let root = 0; root < 12; root++) {
+                const rootPitch = root;
+                const rName = PITCHES.find(p => PITCH_CLASSES[p.index] === root).name.split('/')[0];
+                
+                const checkSlash = (triadIntervals, suffix) => {
+                    const triadPitches = triadIntervals.map(interval => (rootPitch + interval) % 12);
+                    if (triadPitches.every(p => semitones.includes(p))) {
+                        const leftovers = semitones.filter(p => !triadPitches.includes(p));
+                        if (leftovers.length === 1) {
+                            const bassName = PITCHES.find(p => PITCH_CLASSES[p.index] === leftovers[0]).name.split('/')[0];
+                            interpretations.push({ name: `${rName}${suffix}/${bassName}`, score: 95 });
+                        } else if (leftovers.length === 2) {
+                            let diff = Math.abs(leftovers[0] - leftovers[1]);
+                            if (diff === 7 || diff === 5) {
+                                let p5root = (leftovers[1] - leftovers[0] === 7 || leftovers[0] - leftovers[1] === 5) ? leftovers[0] : leftovers[1];
+                                const bassName = PITCHES.find(p => PITCH_CLASSES[p.index] === p5root).name.split('/')[0];
+                                interpretations.push({ name: `${rName}${suffix}/${bassName}5`, score: 90 });
+                            }
+                        }
+                    }
+                };
+                checkSlash(triMaj, "");
+                checkSlash(triMin, "m");
             }
 
-            if (selectedIndices.length === 5) {
-              for (let i = 0; i < 12; i++) {
-                const rootName = PITCHES[i].name.split('/')[0];
-                if (checkShape(i, 1, 2, 4, 5)) return { title: `${rootName} Major 9th`, desc: "Root + M3 + P5 + M7 + M9. Dreamy, floating, and cinematic." };
-                if (checkShape(i, 1, 2, 4, 10)) return { title: `${rootName} Dominant 9th`, desc: "Root + M3 + P5 + m7 + M9. Funky, bluesy, and highly colorful." };
-                if (checkShape(i, 1, 2, 9, 10)) return { title: `${rootName} Minor 9th`, desc: "Root + m3 + P5 + m7 + M9. Deep, emotional, widely used in Neo-Soul." };
-                if (checkShape(i, 1, 2, 3, 4)) return { title: `${rootName} 6/9 Chord`, desc: "Root + M3 + P5 + M6 + M9. A very stable jazz chord often used to end songs." };
-              }
-              return { title: "5-Note Cluster", desc: "A dense harmony. Try looking for the underlying triad inside this shape!" };
+            // Sort and finalize alternative names
+            interpretations.sort((a,b) => b.score - a.score);
+            let uniqueNames = [];
+            interpretations.forEach(item => {
+                if (item.score > 20 && !uniqueNames.includes(item.name)) {
+                    uniqueNames.push(item.name);
+                }
+            });
+
+            if (uniqueNames.length === 0) {
+                return { title: `${selectedIndices.length}-Note Cluster`, desc: "A highly dense, unconventional harmony." };
             }
 
-            if (selectedIndices.length === 6) {
-              for (let i = 0; i < 12; i++) {
-                const rootName = PITCHES[i].name.split('/')[0];
-                if (checkShape(i, 1, 2, 4, 5, 11)) return { title: `${rootName} Major 11th`, desc: "Major 9th + P11. Incredibly dense. The 11th often clashes intensely with the 3rd." };
-                if (checkShape(i, 1, 2, 9, 10, 11)) return { title: `${rootName} Minor 11th`, desc: "Minor 9th + P11. Lush, mysterious, and wide-open." };
-                if (checkShape(i, 1, 2, 3, 4, 5)) return { title: `${rootName} Major 13th`, desc: "A massive, colorful Jazz chord containing almost the entire scale." };
-                if (checkShape(i, 1, 2, 3, 4, 10)) return { title: `${rootName} Dominant 13th`, desc: "The ultimate big-band jazz chord. Full of rich color and tension." };
-              }
-              return { title: "6-Note Cluster", desc: "You're playing half of the chromatic scale! This is highly dense." };
-            }
+            const topNames = uniqueNames.slice(0, 5);
+            const primary = topNames[0];
 
-            if (selectedIndices.length === 7) {
-              for (let i = 0; i < 12; i++) {
-                const rootName = PITCHES[i].name.split('/')[0];
-                if (checkShape(i, 1, 2, 3, 4, 5, 11)) return { title: `${rootName} Major Scale (Ionian)`, desc: "All 7 diatonic notes of the Major scale. Forms a massive 13th chord if played together." };
-                if (checkShape(i, 1, 2, 3, 4, 10, 11)) return { title: `${rootName} Mixolydian Mode`, desc: "Major scale with a flat 7. The foundation for dominant 13th chords." };
-                if (checkShape(i, 1, 2, 3, 9, 10, 11)) return { title: `${rootName} Dorian Mode`, desc: "Minor scale with a raised 6th. Often used for minor 13th chords." };
-                if (checkShape(i, 1, 2, 8, 9, 10, 11)) return { title: `${rootName} Natural Minor (Aeolian)`, desc: "The standard minor scale." };
-              }
-              return { title: "7-Note Cluster / Scale", desc: "A dense 7-note harmony. Listen to the interaction of all these notes." };
-            }
+            let desc = "A complex harmony.";
+            if (primary.includes('/')) desc = "A Slash Chord. A simple triad played over a foreign bass note. Very common in advanced jazz and modern music.";
+            else if (primary.includes('maj7') || primary.includes('maj9') || primary.includes('maj13')) desc = "A Major extension. Smooth, lush, and nostalgic.";
+            else if (primary.includes('m7b5') || primary.includes('ø')) desc = "Half-Diminished. Moody and highly unstable. Often leads to a V chord.";
+            else if (primary.includes('dim7')) desc = "Symmetrical tension used for dramatic transitions.";
+            else if (primary.includes('m7') || primary.includes('m9') || primary.includes('m11')) desc = "A Minor extension. Cool, mellow, and jazzy.";
+            else if (primary.includes('7') && !primary.includes('maj')) desc = "A Dominant extension. Funky, tense, and wants to resolve to a target.";
+            else if (primary.includes('m') && !primary.includes('dim')) desc = "Darker, emotional, and complex.";
+            else if (primary.includes('dim')) desc = "Highly unstable, spooky, wants to collapse.";
+            else if (primary.includes('aug')) desc = "Dreamy, floaty, and unresolved.";
+            else if (primary.includes('sus')) desc = "Open, airy, and creates a 'pull' waiting to resolve to a 3rd.";
+            else if (!primary.includes('m') && !primary.includes('no3')) desc = "Bright, happy, and resolved.";
+            else if (primary.includes('no3')) desc = "A highly altered cluster lacking a core 3rd.";
 
-            if (selectedIndices.length === 8) {
-              return { title: "8-Note Cluster", desc: "You've selected 8 notes! At this density, the harmony becomes extremely thick and chromatic." };
-            }
-
-            return { title: "Too Many Notes", desc: "Clear the board. Keep it to 8 notes maximum for analysis." };
+            return { 
+                title: primary, 
+                altNames: topNames.slice(1),
+                desc: desc 
+            };
           };
 
           const result = getHarmony();
-          
-          // Generate the exact spelling based on the order notes were clicked
           if (selectedIndices.length > 0) {
              result.spelling = selectedIndices.map(i => PITCHES[i].name.split('/')[0]).join(' - ');
           }
-          
           return result;
         };
 
@@ -199,7 +349,6 @@
             if (selectedNodes.includes(index)) {
               newSelection = selectedNodes.filter(i => i !== index);
             } else {
-              // Now allowing up to 8 notes
               if (selectedNodes.length >= 8) {
                 newSelection = [...selectedNodes.slice(1), index]; 
               } else {
@@ -226,13 +375,21 @@
             if (isPlaying) return;
             setIsPlaying(true);
             for (let i = 0; i < intervals.length; i++) {
-              // Calculate exact frequency based on half-step distance from the root note
               const freq = rootFreq * Math.pow(2, intervals[i] / 12);
               playTone(freq, 1.0);
               await new Promise(r => setTimeout(r, 400)); 
             }
             setIsPlaying(false);
           };
+
+          // Generate SVG Staff Notes
+          let staffNotes = selectedNodes.map(idx => ({ idx, ...STAFF_MAP[idx], x: 130 })).sort((a,b) => b.y - a.y);
+          for(let i=0; i<staffNotes.length; i++) {
+              if (i > 0 && Math.abs(staffNotes[i].y - staffNotes[i-1].y) <= 8 && staffNotes[i].x === staffNotes[i-1].x) {
+                  staffNotes[i].x = staffNotes[i-1].x + 18;
+                  for(let j=i+1; j<staffNotes.length; j++) staffNotes[j].x += 18;
+              }
+          }
 
           return (
             <div className="p-4 md:p-8 flex flex-col items-center">
@@ -248,7 +405,7 @@
                     onClick={() => setActiveTab('interactive')}
                     className={`px-4 py-2 rounded-t-lg font-semibold transition-colors ${activeTab === 'interactive' ? 'bg-slate-800 text-sky-400 border-b-2 border-sky-400' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'}`}
                   >
-                    The Canvas
+                    The Canvas (Speller)
                   </button>
                   <button 
                     onClick={() => setActiveTab('circle')}
@@ -275,102 +432,126 @@
               {activeTab === 'interactive' && (
                 <div className="flex flex-col lg:flex-row gap-8 items-start w-full max-w-5xl justify-center">
                   
-                  {/* LEFT: SVG CIRCLE */}
-                  <div className="flex-shrink-0 relative w-full max-w-[450px] aspect-square bg-slate-900 rounded-3xl shadow-2xl p-6 border border-slate-800 mx-auto">
-                    <svg viewBox="0 0 400 400" className="w-full h-full overflow-visible">
-                      <circle cx={CENTER} cy={CENTER} r={RADIUS} fill="none" stroke="#334155" strokeWidth="2" strokeDasharray="5,5" />
-                      
-                      {/* Draw Interval Line */}
-                      {selectedNodes.length === 2 && (
-                        <line 
-                          x1={PITCH_NODES[selectedNodes[0]].x} y1={PITCH_NODES[selectedNodes[0]].y}
-                          x2={PITCH_NODES[selectedNodes[1]].x} y2={PITCH_NODES[selectedNodes[1]].y}
-                          stroke="#38bdf8" strokeWidth="4" className="drop-shadow-[0_0_8px_rgba(56,189,248,0.8)]"
-                        />
-                      )}
+                  {/* LEFT: SVG CIRCLE & STAFF */}
+                  <div className="flex-shrink-0 relative w-full max-w-[450px] bg-slate-900 rounded-3xl shadow-2xl p-6 border border-slate-800 mx-auto flex flex-col">
+                    <div className="relative w-full aspect-square">
+                      <svg viewBox="0 0 400 400" className="w-full h-full overflow-visible">
+                        {/* Background Circle */}
+                        <circle cx={CENTER} cy={CENTER} r={RADIUS} fill="none" stroke="#1e293b" strokeWidth="2" strokeDasharray="5,5" />
 
-                      {/* Draw Triad Polygon */}
-                      {selectedNodes.length >= 3 && (
-                        <polygon 
-                          points={[...selectedNodes].sort((a,b) => a-b).map(i => `${PITCH_NODES[i].x},${PITCH_NODES[i].y}`).join(' ')}
-                          fill={
-                            selectedNodes.length === 3 ? "rgba(56, 189, 248, 0.2)" : 
-                            selectedNodes.length === 4 ? "rgba(167, 139, 250, 0.2)" :
-                            selectedNodes.length >= 7 ? "rgba(234, 88, 12, 0.2)" :
-                            "rgba(244, 114, 182, 0.2)"
-                          }
-                          stroke={
-                            selectedNodes.length === 3 ? "#38bdf8" : 
-                            selectedNodes.length === 4 ? "#a78bfa" : 
-                            selectedNodes.length >= 7 ? "#f97316" :
-                            "#f472b6"
-                          } 
-                          strokeWidth="4"
-                          className={
-                            selectedNodes.length === 3 ? "drop-shadow-[0_0_12px_rgba(56,189,248,0.6)]" : 
-                            selectedNodes.length === 4 ? "drop-shadow-[0_0_12px_rgba(167,139,250,0.6)]" :
-                            selectedNodes.length >= 7 ? "drop-shadow-[0_0_12px_rgba(234,88,12,0.6)]" :
-                            "drop-shadow-[0_0_12px_rgba(244,114,182,0.6)]"
-                          }
-                          strokeLinejoin="round"
-                        />
-                      )}
+                        {/* Draw Interval Line */}
+                        {selectedNodes.length === 2 && (
+                          <line 
+                            x1={PITCH_NODES[selectedNodes[0]].x} y1={PITCH_NODES[selectedNodes[0]].y}
+                            x2={PITCH_NODES[selectedNodes[1]].x} y2={PITCH_NODES[selectedNodes[1]].y}
+                            stroke="#38bdf8" strokeWidth="4" className="drop-shadow-[0_0_8px_rgba(56,189,248,0.8)] opacity-60"
+                          />
+                        )}
 
-                      {/* Draw Nodes */}
-                      {PITCH_NODES.map((node) => {
-                        const isSelected = selectedNodes.includes(node.index);
-                        return (
-                          <g key={node.name} className="cursor-pointer transition-transform hover:scale-110" onClick={() => handleNodeClick(node.index)}>
-                            <circle 
-                              cx={node.x} cy={node.y} r="22" 
-                              fill={isSelected ? (
-                                selectedNodes.length >= 7 ? "#ea580c" : 
-                                selectedNodes.length >= 5 ? "#db2777" : 
-                                selectedNodes.length === 4 ? "#8b5cf6" : 
-                                "#0ea5e9"
-                              ) : "#1e293b"}
-                              stroke={isSelected ? (
-                                selectedNodes.length >= 7 ? "#fed7aa" : 
-                                selectedNodes.length >= 5 ? "#fbcfe8" : 
-                                selectedNodes.length === 4 ? "#c4b5fd" : 
-                                "#bae6fd"
-                              ) : "#475569"} 
-                              strokeWidth="3"
-                              className="transition-all duration-300"
-                            />
-                            <text 
-                              x={node.x} y={node.y} 
-                              textAnchor="middle" dy={showSigs ? "-0.1em" : ".3em"} 
-                              fill={isSelected ? "#ffffff" : "#94a3b8"}
-                              className={`font-bold select-none pointer-events-none transition-all ${node.name.length > 2 ? 'text-[11px]' : 'text-lg'}`}
-                            >
-                              {node.name}
-                            </text>
-                            {showSigs && (
+                        {/* Draw Triad Polygon */}
+                        {selectedNodes.length >= 3 && (
+                          <polygon 
+                            points={[...selectedNodes].sort((a,b) => a-b).map(i => `${PITCH_NODES[i].x},${PITCH_NODES[i].y}`).join(' ')}
+                            fill={
+                              selectedNodes.length === 3 ? "rgba(56, 189, 248, 0.15)" : 
+                              selectedNodes.length === 4 ? "rgba(167, 139, 250, 0.15)" :
+                              selectedNodes.length >= 7 ? "rgba(234, 88, 12, 0.15)" :
+                              "rgba(244, 114, 182, 0.15)"
+                            }
+                            stroke={
+                              selectedNodes.length === 3 ? "#38bdf8" : 
+                              selectedNodes.length === 4 ? "#a78bfa" : 
+                              selectedNodes.length >= 7 ? "#f97316" :
+                              "#f472b6"
+                            } 
+                            strokeWidth="3"
+                            className={
+                              selectedNodes.length === 3 ? "drop-shadow-[0_0_12px_rgba(56,189,248,0.4)]" : 
+                              selectedNodes.length === 4 ? "drop-shadow-[0_0_12px_rgba(167,139,250,0.4)]" :
+                              selectedNodes.length >= 7 ? "drop-shadow-[0_0_12px_rgba(234,88,12,0.4)]" :
+                              "drop-shadow-[0_0_12px_rgba(244,114,182,0.4)]"
+                            }
+                            strokeLinejoin="round"
+                          />
+                        )}
+
+                        {/* Draw Nodes */}
+                        {PITCH_NODES.map((node) => {
+                          const isSelected = selectedNodes.includes(node.index);
+                          const isFirst = selectedNodes[0] === node.index;
+                          return (
+                            <g key={node.name} className="cursor-pointer transition-transform hover:scale-110" onClick={() => handleNodeClick(node.index)}>
+                              <circle 
+                                cx={node.x} cy={node.y} r="22" 
+                                fill={isSelected ? (
+                                  isFirst ? "#10b981" : 
+                                  selectedNodes.length >= 7 ? "#ea580c" : 
+                                  selectedNodes.length >= 5 ? "#db2777" : 
+                                  selectedNodes.length === 4 ? "#8b5cf6" : 
+                                  "#0ea5e9"
+                                ) : "#1e293b"}
+                                stroke={isSelected ? (
+                                  isFirst ? "#6ee7b7" :
+                                  selectedNodes.length >= 7 ? "#fed7aa" : 
+                                  selectedNodes.length >= 5 ? "#fbcfe8" : 
+                                  selectedNodes.length === 4 ? "#c4b5fd" : 
+                                  "#bae6fd"
+                                ) : "#475569"} 
+                                strokeWidth={isFirst ? "4" : "3"}
+                                className="transition-all duration-300"
+                              />
                               <text 
                                 x={node.x} y={node.y} 
-                                textAnchor="middle" dy="1.4em" 
-                                fill={isSelected ? "#e2e8f0" : "#64748b"}
-                                className="font-medium text-[9px] select-none pointer-events-none transition-all"
+                                textAnchor="middle" dy={showSigs ? "-0.1em" : ".3em"} 
+                                fill={isSelected ? "#ffffff" : "#94a3b8"}
+                                className={`font-bold select-none pointer-events-none transition-all ${node.name.length > 2 ? 'text-[11px]' : 'text-lg'}`}
                               >
-                                {node.sig}
+                                {node.name}
                               </text>
-                            )}
-                          </g>
-                        );
-                      })}
-                    </svg>
+                              {showSigs && (
+                                <text 
+                                  x={node.x} y={node.y} 
+                                  textAnchor="middle" dy="1.4em" 
+                                  fill={isSelected ? "#e2e8f0" : "#64748b"}
+                                  className="font-medium text-[9px] select-none pointer-events-none transition-all"
+                                >
+                                  {node.sig}
+                                </text>
+                              )}
+                            </g>
+                          );
+                        })}
+                      </svg>
+                    </div>
 
-                    <div className="absolute bottom-6 right-6 flex flex-col gap-2">
+                    {/* --- THE GRAND STAFF --- */}
+                    <div className="w-full h-28 bg-slate-950/40 rounded-2xl border border-slate-700/50 flex justify-center items-center shadow-inner mt-4">
+                      <svg viewBox="0 0 300 110" className="w-full h-full overflow-visible">
+                          {[20, 35, 50, 65, 80].map(y => (
+                              <line key={y} x1="40" y1={y} x2="260" y2={y} stroke="#475569" strokeWidth="1" />
+                          ))}
+                          <text x="45" y="85" fill="#64748b" fontSize="65" fontFamily="Georgia, serif">𝄞</text>
+                          
+                          {staffNotes.map((note, i) => (
+                              <g key={note.idx + '-' + i} className="transition-all duration-300">
+                                  {note.ledger && <line x1={note.x - 12} y1={note.y} x2={note.x + 12} y2={note.y} stroke="#cbd5e1" strokeWidth="1.5" />}
+                                  <ellipse cx={note.x} cy={note.y} rx="7" ry="5" fill="#f8fafc" transform={`rotate(-15 ${note.x} ${note.y})`} />
+                                  {note.acc && <text x={note.x - 14} y={note.y + 4} fill="#f8fafc" fontSize="14" fontFamily="sans-serif">{note.acc === 'b' ? '♭' : '♯'}</text>}
+                              </g>
+                          ))}
+                      </svg>
+                    </div>
+
+                    <div className="flex justify-center gap-3 w-full mt-6">
                       <button 
                         onClick={() => setShowSigs(!showSigs)}
-                        className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-slate-700 shadow-md"
+                        className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-3 rounded-xl text-sm font-medium transition-colors border border-slate-700 shadow-md"
                       >
                         {showSigs ? "Hide Key Sigs" : "Show Key Sigs"}
                       </button>
                       <button 
                         onClick={() => setSelectedNodes([])}
-                        className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-slate-700 shadow-md"
+                        className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-3 rounded-xl text-sm font-medium transition-colors border border-slate-700 shadow-md"
                       >
                         Clear Board
                       </button>
@@ -379,14 +560,24 @@
 
                   {/* RIGHT: CONTROLS & READOUT */}
                   <div className="flex flex-col max-w-md w-full space-y-6 mx-auto">
-                    <div className="bg-slate-800 rounded-xl p-5 border border-slate-700 shadow-inner h-40 flex flex-col justify-center transition-all relative">
-                      <h2 className="text-xl font-bold text-sky-300 mb-1">{harmonyInfo.title}</h2>
+                    <div className="bg-slate-800 rounded-xl p-5 border border-slate-700 shadow-inner min-h-40 flex flex-col justify-center transition-all relative pb-12">
+                      <h2 className="text-xl md:text-3xl font-bold text-sky-300 mb-1">{harmonyInfo.title}</h2>
+                      
+                      {harmonyInfo.altNames && harmonyInfo.altNames.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 mb-2 mt-1">
+                              <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider pt-0.5">Also known as:</span>
+                              {harmonyInfo.altNames.map(name => (
+                                  <span key={name} className="bg-slate-950 border border-slate-700 text-slate-300 px-2 py-0.5 rounded text-[11px] shadow-sm">{name}</span>
+                              ))}
+                          </div>
+                      )}
+
                       <p className="text-slate-300 text-sm leading-relaxed">{harmonyInfo.desc}</p>
                       
                       {/* Note Spelling Output */}
                       {harmonyInfo.spelling && (
-                        <p className="text-emerald-400 text-xs font-bold mt-2 pt-2 border-t border-slate-700/50 tracking-wider">
-                          Notes: {harmonyInfo.spelling}
+                        <p className="text-emerald-400 text-xs font-bold mt-3 pt-2 border-t border-slate-700/50 tracking-wider">
+                          Notes Added: {harmonyInfo.spelling}
                         </p>
                       )}
 
@@ -647,7 +838,7 @@
                               <span className="text-sm">Major. The root of the key. It feels completely resolved and at peace.</span>
                             </div>
                           </div>
-                          <button disabled={isPlaying} onClick={() => { setSelectedNodes([0]); playChord([0]); }} className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-sky-300 px-4 py-2 rounded-lg text-xs font-bold transition-colors shrink-0 shadow-md self-start sm:self-center">▶ Play Tone</button>
+                          <button disabled={isPlaying} onClick={() => { setSelectedNodes([0]); playChord([0]); }} className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-sky-300 px-4 py-2 rounded-lg text-xs font-bold transition-colors shrink-0 shadow-md self-start sm:self-center">▶ Play Tone (C)</button>
                         </div>
                         
                         <div className="bg-slate-800 p-4 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-4 border-indigo-500">
@@ -658,7 +849,7 @@
                               <span className="text-sm">Minor. It acts as a bridge that strongly leads directly into the V (Dominant) chord.</span>
                             </div>
                           </div>
-                          <button disabled={isPlaying} onClick={() => { setSelectedNodes([2]); playChord([2]); }} className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-indigo-300 px-4 py-2 rounded-lg text-xs font-bold transition-colors shrink-0 shadow-md self-start sm:self-center">▶ Play Tone</button>
+                          <button disabled={isPlaying} onClick={() => { setSelectedNodes([2]); playChord([2]); }} className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-indigo-300 px-4 py-2 rounded-lg text-xs font-bold transition-colors shrink-0 shadow-md self-start sm:self-center">▶ Play Tone (D)</button>
                         </div>
 
                         <div className="bg-slate-800 p-4 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-4 border-blue-400">
@@ -669,7 +860,7 @@
                               <span className="text-sm">Minor. Halfway between the Tonic and Dominant. It shares 2 notes with the Tonic, making it sound stable but slightly floaty.</span>
                             </div>
                           </div>
-                          <button disabled={isPlaying} onClick={() => { setSelectedNodes([4]); playChord([4]); }} className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-blue-300 px-4 py-2 rounded-lg text-xs font-bold transition-colors shrink-0 shadow-md self-start sm:self-center">▶ Play Tone</button>
+                          <button disabled={isPlaying} onClick={() => { setSelectedNodes([4]); playChord([4]); }} className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-blue-300 px-4 py-2 rounded-lg text-xs font-bold transition-colors shrink-0 shadow-md self-start sm:self-center">▶ Play Tone (E)</button>
                         </div>
 
                         <div className="bg-slate-800 p-4 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-4 border-emerald-400">
@@ -680,7 +871,7 @@
                               <span className="text-sm">Major. The "away" chord. It wants to wander off or step up to the V chord. Used heavily in Gospel and Rock.</span>
                             </div>
                           </div>
-                          <button disabled={isPlaying} onClick={() => { setSelectedNodes([11]); playChord([11]); }} className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-emerald-300 px-4 py-2 rounded-lg text-xs font-bold transition-colors shrink-0 shadow-md self-start sm:self-center">▶ Play Tone</button>
+                          <button disabled={isPlaying} onClick={() => { setSelectedNodes([11]); playChord([11]); }} className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-emerald-300 px-4 py-2 rounded-lg text-xs font-bold transition-colors shrink-0 shadow-md self-start sm:self-center">▶ Play Tone (F)</button>
                         </div>
 
                         <div className="bg-slate-800 p-4 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-4 border-emerald-600">
@@ -691,7 +882,7 @@
                               <span className="text-sm">Major. Contains the "leading tone" of the scale. It creates massive tension that strongly wants to "pull" back home to the I chord.</span>
                             </div>
                           </div>
-                          <button disabled={isPlaying} onClick={() => { setSelectedNodes([1]); playChord([1]); }} className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-emerald-400 px-4 py-2 rounded-lg text-xs font-bold transition-colors shrink-0 shadow-md self-start sm:self-center">▶ Play Tone</button>
+                          <button disabled={isPlaying} onClick={() => { setSelectedNodes([1]); playChord([1]); }} className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-emerald-400 px-4 py-2 rounded-lg text-xs font-bold transition-colors shrink-0 shadow-md self-start sm:self-center">▶ Play Tone (G)</button>
                         </div>
 
                         <div className="bg-slate-800 p-4 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-4 border-slate-500">
@@ -702,7 +893,7 @@
                               <span className="text-sm">Minor. The minor equivalent of the Home Base. Often used for "Deceptive Cadences" (going V &rarr; vi instead of V &rarr; I to surprise the listener).</span>
                             </div>
                           </div>
-                          <button disabled={isPlaying} onClick={() => { setSelectedNodes([3]); playChord([3]); }} className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-300 px-4 py-2 rounded-lg text-xs font-bold transition-colors shrink-0 shadow-md self-start sm:self-center">▶ Play Tone</button>
+                          <button disabled={isPlaying} onClick={() => { setSelectedNodes([3]); playChord([3]); }} className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-300 px-4 py-2 rounded-lg text-xs font-bold transition-colors shrink-0 shadow-md self-start sm:self-center">▶ Play Tone (A)</button>
                         </div>
 
                         <div className="bg-slate-800 p-4 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-4 border-rose-500">
@@ -713,7 +904,7 @@
                               <span className="text-sm">Diminished. Extremely unstable. It is basically a V7 chord without the root note. It desperately wants to collapse upward to the Tonic. <em>(Note: In a minor key, the 7th chord is called the Subtonic and is Major: bVII).</em></span>
                             </div>
                           </div>
-                          <button disabled={isPlaying} onClick={() => { setSelectedNodes([5]); playChord([5]); }} className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-rose-300 px-4 py-2 rounded-lg text-xs font-bold transition-colors shrink-0 shadow-md self-start sm:self-center">▶ Play Tone</button>
+                          <button disabled={isPlaying} onClick={() => { setSelectedNodes([5]); playChord([5]); }} className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-rose-300 px-4 py-2 rounded-lg text-xs font-bold transition-colors shrink-0 shadow-md self-start sm:self-center">▶ Play Tone (B)</button>
                         </div>
                       </div>
                     </section>
